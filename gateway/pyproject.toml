@@ -1,0 +1,22 @@
+[project]
+name = "scientiam-remote-ops-gateway"
+version = "0.1.0"
+description = "Governed MCP/OpenSSH remote operations gateway for SCIENTIAM"
+requires-python = ">=3.11"
+dependencies = [
+  "mcp>=1.13,<2",
+  "pydantic>=2.7,<3"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8,<9",
+  "jsonschema>=4.23,<5"
+]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

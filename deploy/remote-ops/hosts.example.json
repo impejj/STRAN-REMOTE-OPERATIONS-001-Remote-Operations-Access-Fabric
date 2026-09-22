@@ -1,0 +1,33 @@
+{
+  "schema": "SCIENTIAM_REMOTE_OPS_HOST_REGISTRY/0.1",
+  "hosts": [
+    {
+      "schema": "SCIENTIAM_REMOTE_OPS_HOST/0.1",
+      "host_id": "PROFESYS-SCIENTIAM",
+      "owner_id": "PROFESYS",
+      "ssh_alias": "profesys-scientiam-srof",
+      "capabilities": ["FILESYSTEM","PROCESS","SYSTEMD","DOCKER","GIT","JOURNAL","NETWORK"],
+      "allowed_roots": ["/srv/scientiam","/srv/scientiam/workspace"],
+      "allowed_services": [],
+      "allowed_containers": [],
+      "allowed_repositories": ["/srv/scientiam/repos/scientiam"],
+      "allowed_data_classes": ["PUBLIC","SYNTHETIC","INTERNAL_LOW","CONFIDENTIAL"],
+      "lifecycle_state": "REGISTERED",
+      "notes": "Populate service/container allowlists only after live inventory."
+    },
+    {
+      "schema": "SCIENTIAM_REMOTE_OPS_HOST/0.1",
+      "host_id": "THINKPAD-E470",
+      "owner_id": "PROFESYS",
+      "ssh_alias": "thinkpad-e470-srof",
+      "capabilities": ["FILESYSTEM","PROCESS","SYSTEMD","GIT","JOURNAL","NETWORK","GUI"],
+      "allowed_roots": ["/home/CHANGE_ME/work/profesys"],
+      "allowed_services": [],
+      "allowed_containers": [],
+      "allowed_repositories": ["/home/CHANGE_ME/work/profesys/scientiam"],
+      "allowed_data_classes": ["PUBLIC","SYNTHETIC","INTERNAL_LOW","CONFIDENTIAL"],
+      "lifecycle_state": "REGISTERED",
+      "notes": "GUI delivered by MeshCentral human plane."
+    }
+  ]
+}
