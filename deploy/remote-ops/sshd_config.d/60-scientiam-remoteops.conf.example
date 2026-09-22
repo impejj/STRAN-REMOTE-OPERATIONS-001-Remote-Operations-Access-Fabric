@@ -1,0 +1,18 @@
+# Review and test with: sshd -t
+# Apply only after a second terminal proves the new key path.
+#
+# This snippet does NOT globally disable password authentication because that
+# would be unsafe during bootstrap. Global hardening is a later explicit gate.
+
+PermitRootLogin no
+
+Match User scientiam-remoteops
+    PubkeyAuthentication yes
+    PasswordAuthentication no
+    KbdInteractiveAuthentication no
+    X11Forwarding no
+    AllowAgentForwarding no
+    PermitTunnel no
+    GatewayPorts no
+    ClientAliveInterval 60
+    ClientAliveCountMax 3
