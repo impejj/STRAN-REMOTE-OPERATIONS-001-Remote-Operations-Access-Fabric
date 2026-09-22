@@ -1,4 +1,5 @@
 name: SROF CI
+# EXECUTION_POLICY: Self-hosted local-first CI; PR or explicit manual dispatch only, no merge-push duplicate.
 
 on:
   pull_request:
@@ -9,16 +10,7 @@ on:
       - "registry/**"
       - "tests/**"
       - ".github/workflows/srof-ci.yml"
-  push:
-    branches: [main]
-    paths:
-      - "gateway/**"
-      - "docs/**"
-      - "deploy/**"
-      - "registry/**"
-      - "tests/**"
-      - ".github/workflows/srof-ci.yml"
-
+  workflow_dispatch:
 permissions:
   contents: read
 
