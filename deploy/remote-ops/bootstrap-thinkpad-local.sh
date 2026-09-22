@@ -36,6 +36,11 @@ fi
 install -d -m 0750 -o "$REMOTE_USER" -g "$REMOTE_USER" /var/lib/scientiam/remote-ops
 install -d -m 0750 -o "$REMOTE_USER" -g "$REMOTE_USER" /var/log/scientiam/remote-ops
 
+# Ubuntu 24.04/OpenSSH may not create the runtime privilege-separation
+# directory until systemd starts sshd. Create it explicitly so config
+# validation is reliable during first bootstrap as well as re-runs.
+install -d -m 0755 -o root -g root /run/sshd
+
 sshd -t
 systemctl enable --now ssh
 
