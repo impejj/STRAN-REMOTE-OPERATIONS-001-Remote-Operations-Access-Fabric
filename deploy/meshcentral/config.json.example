@@ -1,0 +1,22 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Ylianst/MeshCentral/master/meshcentral-config-schema.json",
+  "settings": {
+    "plugins": { "enabled": false },
+    "cert": "CHANGE_ME",
+    "port": 443,
+    "redirPort": 80,
+    "tlsOffload": false,
+    "SelfUpdate": false,
+    "AllowFraming": false,
+    "WebRTC": false
+  },
+  "domains": {
+    "": {
+      "title": "SCIENTIAM Remote Operations",
+      "title2": "PROFESYS",
+      "NewAccounts": false,
+      "localSessionRecording": true,
+      "allowedOrigin": false
+    }
+  }
+}
