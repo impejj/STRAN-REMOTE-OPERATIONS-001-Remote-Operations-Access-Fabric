@@ -1,0 +1,49 @@
+name: Governed Remote Operations Work Item
+description: Track a bounded STRAN-REMOTE-OPERATIONS-001 change
+title: "[SROF] "
+body:
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - P0
+        - P1
+        - P2
+    validations:
+      required: true
+  - type: dropdown
+    id: layer
+    attributes:
+      label: Layer
+      options:
+        - HUMAN
+        - AI
+        - TRANSPORT
+        - SECURITY
+        - EVIDENCE
+        - HOST
+        - INTEGRATION
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Target outcome
+      description: Define the observable result.
+    validations:
+      required: true
+  - type: textarea
+    id: authority
+    attributes:
+      label: Authority boundary
+      description: State what this work may and may not change.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Verification / evidence
+      description: Define how completion will be proved.
+    validations:
+      required: true
