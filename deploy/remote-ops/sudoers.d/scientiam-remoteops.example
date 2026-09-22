@@ -1,0 +1,9 @@
+# Validate with visudo -cf before installation.
+# Start empty. Add exact commands only after a real P0 use case is approved.
+#
+# Example shape (DO NOT uncomment blindly):
+# scientiam-remoteops ALL=(root) NOPASSWD: /usr/bin/systemctl restart scientiam-example.service
+# scientiam-remoteops ALL=(root) NOPASSWD: /usr/bin/systemctl is-active scientiam-example.service
+#
+# Never add:
+# scientiam-remoteops ALL=(ALL) NOPASSWD: ALL
