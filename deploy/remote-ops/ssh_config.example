@@ -1,0 +1,20 @@
+# Client-side SSH aliases. Keep private keys outside Git.
+Host profesys-scientiam-srof
+    HostName CHANGE_ME_LAN_IP
+    User scientiam-remoteops
+    IdentityFile ~/.ssh/scientiam_remoteops_server
+    IdentitiesOnly yes
+    BatchMode yes
+    ServerAliveInterval 30
+    ServerAliveCountMax 3
+    StrictHostKeyChecking yes
+
+Host thinkpad-e470-srof
+    HostName CHANGE_ME
+    User scientiam-remoteops
+    IdentityFile ~/.ssh/scientiam_remoteops_thinkpad
+    IdentitiesOnly yes
+    BatchMode yes
+    ServerAliveInterval 30
+    ServerAliveCountMax 3
+    StrictHostKeyChecking yes
