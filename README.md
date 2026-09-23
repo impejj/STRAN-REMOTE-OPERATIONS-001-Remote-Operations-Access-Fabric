@@ -16,7 +16,7 @@ Two independent planes:
 1. **Human Operations Plane** — interactive browser-based remote administration.
 2. **AI Operations Plane** — governed MCP/OpenSSH access with policy enforcement, bounded tools, verification and durable receipts.
 
-Desktop Commander Remote (DCP) remains a temporary fallback during migration. It is not the canonical control plane.
+**DCP / Desktop Commander Remote is retired from the operational path.** It is neither the canonical control plane nor an approved fallback for normal PROFESYS/SCIENTIAM work. Remote execution must use the direct STRAN/SROF access fabric (OpenSSH and governed direct-access tooling).
 
 ## Canonical boundaries
 
@@ -38,7 +38,7 @@ Desktop Commander Remote (DCP) remains a temporary fallback during migration. It
 
 ## P0 objective
 
-A DCP outage must not block:
+Loss or unavailability of any third-party remote-control service must not block:
 
 - terminal access;
 - file transfer;
@@ -77,5 +77,19 @@ evidence/    non-secret evidence conventions and receipts metadata
 4. Dedicated OpenSSH identities.
 5. SROF gateway deployment and read-only smoke tests.
 6. Controlled mutation verification.
-7. DCP outage drill.
-8. Demote DCP to `FALLBACK_NON_CRITICAL` only after evidence.
+7. Direct-access outage/recovery drill.
+8. Verify that no operational runbook, chat continuity prompt or worker bootstrap still depends on DCP.
+
+
+## Canonical chat/runtime directive — 2026-09-23
+
+This rule is mandatory for every PROFESYS/SCIENTIAM chat, worker, runbook and continuity handoff:
+
+- **Do not use DCP / Remote Desktop Commander for machine access.**
+- **Do not wait for DCP quotas, sessions or device state.**
+- Use the direct STRAN/SROF remote-access fabric: OpenSSH/direct machine access with governed identities, bounded authority, verification and evidence.
+- ThinkPad and SERVER are treated as directly reachable operational nodes when their STRAN/SROF path is healthy.
+- A continuation chat that proposes DCP is operating from stale context and must refresh from this repository before proceeding.
+- DCP references may remain only as historical evidence of the migration away from quota-bound tooling.
+
+This directive supersedes earlier migration-era wording that described DCP as a fallback.
