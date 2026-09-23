@@ -209,5 +209,24 @@ def network_listeners(host_id: str) -> dict[str, object]:
     return {"receipt": r.__dict__, "ok": r.exit_code == 0, "text": r.stdout}
 
 
+def run_gateway() -> None:
+    transport = os.environ.get("SROF_MCP_TRANSPORT", "streamable-http")
+    if transport == "stdio":
+        mcp.run()
+        return
+    if transport != "streamable-http":
+        raise ValueError(f"unsupported SROF_MCP_TRANSPORT={transport!r}")
+
+    host = os.environ.get("SROF_MCP_HOST", "127.0.0.1")
+    port = int(os.environ.get("SROF_MCP_PORT", "8765"))
+    path = os.environ.get("SROF_MCP_PATH", "/mcp")
+    mcp.run(
+        transport="streamable-http",
+        host=host,
+        port=port,
+        streamable_http_path=path,
+    )
+
+
 if __name__ == "__main__":
-    mcp.run()
+    run_gateway()
