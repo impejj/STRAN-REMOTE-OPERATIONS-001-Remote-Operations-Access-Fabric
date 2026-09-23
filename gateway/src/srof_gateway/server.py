@@ -17,7 +17,15 @@ from .policy import (
 from .ssh_runner import SshRunner
 
 
-mcp = FastMCP("SCIENTIAM Remote Operations Fabric")
+def _mcp_runtime_settings() -> dict[str, object]:
+    return {
+        "host": os.environ.get("SROF_MCP_HOST", "127.0.0.1"),
+        "port": int(os.environ.get("SROF_MCP_PORT", "8765")),
+        "streamable_http_path": os.environ.get("SROF_MCP_PATH", "/mcp"),
+    }
+
+
+mcp = FastMCP("SCIENTIAM Remote Operations Fabric", **_mcp_runtime_settings())
 HOSTS_FILE = Path(os.environ.get("SROF_HOSTS_FILE", "/etc/scientiam/remote-ops/hosts.json"))
 RECEIPTS = Path(os.environ.get("SROF_RECEIPT_DIR", "/var/lib/scientiam/remote-ops/receipts"))
 runner = SshRunner(RECEIPTS)
@@ -217,15 +225,7 @@ def run_gateway() -> None:
     if transport != "streamable-http":
         raise ValueError(f"unsupported SROF_MCP_TRANSPORT={transport!r}")
 
-    host = os.environ.get("SROF_MCP_HOST", "127.0.0.1")
-    port = int(os.environ.get("SROF_MCP_PORT", "8765"))
-    path = os.environ.get("SROF_MCP_PATH", "/mcp")
-    mcp.run(
-        transport="streamable-http",
-        host=host,
-        port=port,
-        streamable_http_path=path,
-    )
+    mcp.run(transport="streamable-http")
 
 
 if __name__ == "__main__":
