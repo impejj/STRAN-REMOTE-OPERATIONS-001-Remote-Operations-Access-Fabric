@@ -28,9 +28,13 @@ class SshRunner:
     def __init__(self, receipt_dir: Path, timeout_seconds: int = 30) -> None:
         self.receipt_dir = receipt_dir
         self.timeout_seconds = timeout_seconds
-        self.receipt_dir.mkdir(parents=True, exist_ok=True)
 
     def run_argv(self, host_id: str, ssh_alias: str, operation: str, remote_argv: Sequence[str]) -> Receipt:
+        # Receipt storage is mandatory but must not cause filesystem side
+        # effects merely by importing the gateway module. Create/verify it
+        # immediately before any remote operation so failure remains fail-closed.
+        self.receipt_dir.mkdir(parents=True, exist_ok=True)
+
         request_id = f"SROF-{uuid.uuid4()}"
         started = time.time()
 
