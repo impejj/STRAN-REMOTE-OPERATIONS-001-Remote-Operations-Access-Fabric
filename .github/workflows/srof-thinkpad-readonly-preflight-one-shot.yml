@@ -2,11 +2,7 @@ name: SROF ThinkPad Read-Only Preflight One-Shot
 # TEMPORARY_BOOTSTRAP_BRIDGE: self-hosted only, read-only, auto trigger removed after evidence capture.
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/srof-thinkpad-readonly-preflight-one-shot.yml"
-
+  workflow_dispatch:
 permissions:
   contents: read
 
