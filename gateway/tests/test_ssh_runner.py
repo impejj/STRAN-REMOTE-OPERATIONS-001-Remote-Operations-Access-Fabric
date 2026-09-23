@@ -29,3 +29,25 @@ def test_receipt_bounds_output(mock_run, tmp_path: Path):
     receipt = SshRunner(tmp_path).run_argv("SERVER", "server", "bounded", ["false"])
     assert len(receipt.stdout) == 16000
     assert len(receipt.stderr) == 8000
+
+
+def test_constructor_has_no_filesystem_side_effect(tmp_path: Path):
+    receipt_dir = tmp_path / "nested" / "receipts"
+    SshRunner(receipt_dir)
+    assert not receipt_dir.exists()
+
+
+@patch("srof_gateway.ssh_runner.subprocess.run")
+def test_receipt_dir_is_created_before_remote_execution(mock_run, tmp_path: Path):
+    mock_run.return_value = Mock(returncode=0, stdout="ok\n", stderr="")
+    receipt_dir = tmp_path / "nested" / "receipts"
+
+    receipt = SshRunner(receipt_dir).run_argv(
+        "SERVER",
+        "server",
+        "health",
+        ["true"],
+    )
+
+    assert receipt_dir.is_dir()
+    assert (receipt_dir / f"{receipt.request_id}.json").is_file()
