@@ -1,0 +1,45 @@
+{
+  "schema": "SCIENTIAM_REMOTE_OPS_CHANNEL_REGISTRY/0.1",
+  "provider": "STRAN-REMOTE-OPERATIONS-001",
+  "implementation": "SROF",
+  "channels": [
+    {
+      "channel_id": "CHANNEL-SERVER-REMOTEOPS-001",
+      "host_id": "PROFESYS-SCIENTIAM",
+      "transport": "MCP_OVER_OPENSSH",
+      "lifecycle_state": "REGISTERED",
+      "capability_classes": [
+        "FILESYSTEM",
+        "PROCESS",
+        "SYSTEMD",
+        "DOCKER",
+        "GIT",
+        "JOURNAL",
+        "NETWORK"
+      ],
+      "mutation_policy": "DENY_BY_DEFAULT",
+      "receipt_required": true
+    },
+    {
+      "channel_id": "CHANNEL-THINKPAD-REMOTEOPS-001",
+      "host_id": "THINKPAD-E470",
+      "transport": "MCP_OVER_OPENSSH",
+      "lifecycle_state": "HEALTH_OK",
+      "capability_classes": [
+        "FILESYSTEM",
+        "PROCESS",
+        "SYSTEMD",
+        "GIT",
+        "JOURNAL",
+        "NETWORK"
+      ],
+      "mutation_policy": "DENY_BY_DEFAULT",
+      "receipt_required": true
+    }
+  ],
+  "notes": [
+    "This file is a sanitized integration contract example, not the live registry.",
+    "Live host paths, keys, aliases and network details remain outside Git.",
+    "Lifecycle promotion requires readback and durable evidence."
+  ]
+}
