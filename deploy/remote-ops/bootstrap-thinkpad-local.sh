@@ -2,7 +2,29 @@
 set -euo pipefail
 
 REMOTE_USER="scientiam-remoteops"
-SERVER_PUBKEY='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBekfb+V1no/uqbCpFDmKH6udDeI42JzzjdW2cmM8Alv STRAN-REMOTE-OPERATIONS-001 server-to-thinkpad'
+AUTHORIZED_KEY_FILE=""
+
+usage() {
+  cat <<EOF
+Usage: $0 [--authorized-key-file PATH] [--user NAME]
+
+Bootstraps the local ThinkPad side of STRAN-REMOTE-OPERATIONS-001.
+It installs/enables OpenSSH if needed, creates the dedicated remote-ops
+account and optionally installs one approved public key from a local file.
+
+No firewall, root-login, password-authentication, sudoers or DCP policy is
+changed by this script.
+EOF
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --authorized-key-file) AUTHORIZED_KEY_FILE="$2"; shift 2 ;;
+    --user) REMOTE_USER="$2"; shift 2 ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "Unknown argument: $1" >&2; usage; exit 2 ;;
+  esac
+done
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "ERROR: run with sudo/root" >&2
@@ -19,6 +41,8 @@ if ! command -v sshd >/dev/null 2>&1; then
   DEBIAN_FRONTEND=noninteractive apt-get install -y openssh-server
 fi
 
+install -d -m 0755 -o root -g root /run/sshd
+
 if ! id "$REMOTE_USER" >/dev/null 2>&1; then
   useradd --create-home --shell /bin/bash "$REMOTE_USER"
 fi
@@ -29,17 +53,27 @@ touch "$AUTH"
 chown "$REMOTE_USER:$REMOTE_USER" "$AUTH"
 chmod 0600 "$AUTH"
 
-if ! grep -Fqx "$SERVER_PUBKEY" "$AUTH"; then
-  printf '%s\n' "$SERVER_PUBKEY" >> "$AUTH"
+if [ -n "$AUTHORIZED_KEY_FILE" ]; then
+  if [ ! -f "$AUTHORIZED_KEY_FILE" ]; then
+    echo "ERROR: authorized key file not found: $AUTHORIZED_KEY_FILE" >&2
+    exit 4
+  fi
+  PUBKEY="$(tr -d '\r\n' < "$AUTHORIZED_KEY_FILE")"
+  case "$PUBKEY" in
+    ssh-ed25519\ *|ssh-rsa\ *|ecdsa-sha2-nistp256\ *|ecdsa-sha2-nistp384\ *|ecdsa-sha2-nistp521\ *) ;;
+    *) echo "ERROR: file does not contain a supported SSH public key" >&2; exit 5 ;;
+  esac
+  if ! grep -Fqx "$PUBKEY" "$AUTH"; then
+    printf '%s\n' "$PUBKEY" >> "$AUTH"
+  fi
+  echo "AUTHORIZED_KEY_INSTALLED=YES"
+  echo "AUTHORIZED_KEY_FINGERPRINT=$(ssh-keygen -lf "$AUTHORIZED_KEY_FILE" | awk '{print $2}')"
+else
+  echo "AUTHORIZED_KEY_INSTALLED=NO"
 fi
 
 install -d -m 0750 -o "$REMOTE_USER" -g "$REMOTE_USER" /var/lib/scientiam/remote-ops
 install -d -m 0750 -o "$REMOTE_USER" -g "$REMOTE_USER" /var/log/scientiam/remote-ops
-
-# Ubuntu 24.04/OpenSSH may not create the runtime privilege-separation
-# directory until systemd starts sshd. Create it explicitly so config
-# validation is reliable during first bootstrap as well as re-runs.
-install -d -m 0755 -o root -g root /run/sshd
 
 sshd -t
 systemctl enable --now ssh
@@ -47,7 +81,6 @@ systemctl enable --now ssh
 echo "SSH_ACTIVE=$(systemctl is-active ssh)"
 echo "SSH_ENABLED=$(systemctl is-enabled ssh)"
 echo "REMOTE_USER=$REMOTE_USER"
-echo "AUTHORIZED_KEY_FINGERPRINT=SHA256:Ri+NScFs8xmNjtXalxs6VmB+KULf0Y4Qs1awmGO1Zug"
 echo "IPV4:"
 ip -4 -br addr | awk '$1 != "lo" {print}'
 echo "LISTEN_22:"
