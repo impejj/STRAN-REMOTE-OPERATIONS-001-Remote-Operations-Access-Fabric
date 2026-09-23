@@ -10,6 +10,10 @@ Group=scientiam-remoteops
 WorkingDirectory=/opt/scientiam/remote-ops-gateway
 Environment=SROF_HOSTS_FILE=/etc/scientiam/remote-ops/hosts.json
 Environment=SROF_RECEIPT_DIR=/var/lib/scientiam/remote-ops/receipts
+Environment=SROF_MCP_TRANSPORT=streamable-http
+Environment=SROF_MCP_HOST=127.0.0.1
+Environment=SROF_MCP_PORT=8765
+Environment=SROF_MCP_PATH=/mcp
 ExecStart=/opt/scientiam/remote-ops-gateway/.venv/bin/python -m srof_gateway.server
 Restart=on-failure
 RestartSec=5
