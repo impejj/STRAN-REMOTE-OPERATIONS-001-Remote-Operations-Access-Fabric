@@ -37,3 +37,7 @@ jobs:
         run: .venv/bin/pytest -q
       - name: Compile gateway
         run: .venv/bin/python -m compileall src
+      - name: Validate remote-ops shell syntax
+        shell: bash
+        run: |
+          bash -n ../deploy/remote-ops/*.sh
