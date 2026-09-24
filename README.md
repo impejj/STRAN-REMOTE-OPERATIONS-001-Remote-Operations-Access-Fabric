@@ -81,15 +81,18 @@ evidence/    non-secret evidence conventions and receipts metadata
 8. Verify that no operational runbook, chat continuity prompt or worker bootstrap still depends on DCP.
 
 
-## Canonical chat/runtime directive — 2026-09-23
+## Canonical chat/runtime directive — 2026-09-24
 
 This rule is mandatory for every PROFESYS/SCIENTIAM chat, worker, runbook and continuity handoff:
 
-- **Do not use DCP / Remote Desktop Commander for machine access.**
-- **Do not wait for DCP quotas, sessions or device state.**
-- Use the direct STRAN/SROF remote-access fabric: OpenSSH/direct machine access with governed identities, bounded authority, verification and evidence.
-- ThinkPad and SERVER are treated as directly reachable operational nodes when their STRAN/SROF path is healthy.
-- A continuation chat that proposes DCP is operating from stale context and must refresh from this repository before proceeding.
-- DCP references may remain only as historical evidence of the migration away from quota-bound tooling.
+- **Canonical path:** ChatGPT / APPDEV → STRAN/SROF → governed OpenSSH → ThinkPad / SERVER.
+- **DCP / Remote Desktop Commander:** RETIRED / DO NOT USE.
+- **GitHub Actions as remote transport:** DO NOT USE.
+- GitHub is restricted to SCM and native repository functions: repositories, branches, commits, PRs, merges, tags, issues, code review, release/source-management operations and related Git functions.
+- Do not wait for DCP quotas, sessions, device state, GitHub Actions runners or workflow availability to perform remote machine work.
+- ThinkPad and SERVER are treated as directly reachable operational nodes only through the STRAN/SROF direct-access fabric when healthy.
+- If a ChatGPT/APPDEV runtime does not expose the STRAN/SROF tool/channel, it MUST return **TOOLING_GAP**. It MUST NOT invent or select DCP, GitHub Actions, or another transport fallback.
+- A continuation chat that proposes DCP or GitHub Actions for remote machine transport is operating from stale context and must refresh from this repository before proceeding.
+- DCP and historical GitHub-Actions bootstrap bridges may be mentioned only as migration/history evidence, never as an active operational path.
 
-This directive supersedes earlier migration-era wording that described DCP as a fallback.
+This directive supersedes all earlier migration/bootstrap wording that described DCP or GitHub Actions as fallback/bridge transports.
