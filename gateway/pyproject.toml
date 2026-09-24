@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Governed MCP/OpenSSH remote operations gateway for SCIENTIAM"
 requires-python = ">=3.11"
 dependencies = [
-  "mcp>=1.13,<2",
+  "mcp>=1.30,<2",
   "pydantic>=2.7,<3",
   "PyJWT[crypto]>=2.9,<3",
   "uvicorn>=0.30,<1"
