@@ -1,0 +1,27 @@
+[Unit]
+Description=SCIENTIAM SROF Temporary Governed Gap Bridge
+After=network-online.target scientiam-remote-ops-gateway.service
+Wants=network-online.target
+Requires=scientiam-remote-ops-gateway.service
+
+[Service]
+Type=simple
+User=scientiam-remoteops
+Group=scientiam-remoteops
+EnvironmentFile=/etc/scientiam/remote-ops/gap-bridge.env
+WorkingDirectory=/opt/scientiam/remote-ops-gateway
+ExecStart=/opt/scientiam/remote-ops-gateway/.venv/bin/python -m srof_gateway.gap_bridge
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/scientiam/remote-ops
+ReadOnlyPaths=/etc/scientiam/remote-ops
+CapabilityBoundingSet=
+LockPersonality=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target
