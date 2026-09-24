@@ -93,7 +93,11 @@ test -x "$APP_DIR/.venv/bin/python"
 test -r "$HOSTS"
 python3 -m json.tool "$HOSTS" >/dev/null
 
-install -d -m 0700 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "$SERVICE_HOME/.ssh"
+if [ "$MODE" = "apply" ]; then
+  install -d -m 0700 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "$SERVICE_HOME/.ssh"
+elif [ ! -d "$SERVICE_HOME/.ssh" ]; then
+  echo "GATEWAY_SSH_DIR=ABSENT_WILL_CREATE_ON_APPLY"
+fi
 
 echo
 echo "=== CURRENT REGISTRY ==="
