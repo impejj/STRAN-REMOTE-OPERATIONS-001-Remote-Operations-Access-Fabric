@@ -5,8 +5,11 @@
 #   <TUNNEL_UUID>
 #   <CREDENTIALS_JSON>
 #   <SROF_PUBLIC_HOSTNAME>
+#   <CLOUDFLARE_TEAM_NAME>
+#   <ACCESS_APPLICATION_AUD>
 #
-# Keep the SROF origin loopback-only.
+# SROF remains loopback-only. cloudflared validates Cloudflare Access JWTs
+# before proxying requests to the local MCP origin.
 
 tunnel: <TUNNEL_UUID>
 credentials-file: <CREDENTIALS_JSON>
@@ -15,7 +18,10 @@ ingress:
   - hostname: <SROF_PUBLIC_HOSTNAME>
     service: http://127.0.0.1:8765
     originRequest:
-      httpHostHeader: 127.0.0.1
       connectTimeout: 10s
-      noHappyEyeballs: false
+      access:
+        required: true
+        teamName: <CLOUDFLARE_TEAM_NAME>
+        audTag:
+          - <ACCESS_APPLICATION_AUD>
   - service: http_status:404
