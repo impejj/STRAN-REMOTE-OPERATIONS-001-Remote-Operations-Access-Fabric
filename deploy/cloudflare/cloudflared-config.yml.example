@@ -1,0 +1,21 @@
+# SROF Cloudflare Tunnel example.
+# DO NOT COMMIT tunnel credentials or tokens.
+#
+# Replace:
+#   <TUNNEL_UUID>
+#   <CREDENTIALS_JSON>
+#   <SROF_PUBLIC_HOSTNAME>
+#
+# Keep the SROF origin loopback-only.
+
+tunnel: <TUNNEL_UUID>
+credentials-file: <CREDENTIALS_JSON>
+
+ingress:
+  - hostname: <SROF_PUBLIC_HOSTNAME>
+    service: http://127.0.0.1:8765
+    originRequest:
+      httpHostHeader: 127.0.0.1
+      connectTimeout: 10s
+      noHappyEyeballs: false
+  - service: http_status:404
