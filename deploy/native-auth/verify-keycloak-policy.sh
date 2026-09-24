@@ -70,9 +70,13 @@ assert policy is not None and policy.get("enabled") is True, "missing/enabled CI
 cond=next((x for x in (policy.get("conditions") or []) if x.get("condition")=="client-id-uri"),None)
 assert cond is not None, "missing client-id-uri condition"
 ccfg=cond.get("configuration") or {}
+schemes=ccfg.get("client-id-uri-scheme") or []
+assert isinstance(schemes,list), "client-id-uri-scheme must be a JSON list"
+assert schemes==["https"], "CIMD URI scheme must be exactly [https]"
 domains=set(ccfg.get("client-id-uri-allow-permitted-domains") or [])
 assert "chatgpt.com" in domains, "CIMD policy not restricted to chatgpt.com"
 assert "chatgpt-cimd-profile" in (policy.get("profiles") or []), "profile not associated"
+print("CHATGPT_CIMD_URI_SCHEME=PASS")
 print("CHATGPT_CIMD_POLICY=PASS")
 PY
 
