@@ -10,6 +10,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Sequence
 
+from mcp.server.auth.middleware.auth_context import get_access_token
+
 
 @dataclass
 class Receipt:
@@ -22,6 +24,9 @@ class Receipt:
     stdout: str
     stderr: str
     command_digest: str
+    actor_subject: str | None = None
+    client_id: str | None = None
+    scopes: list[str] | None = None
 
 
 class SshRunner:
@@ -56,6 +61,7 @@ class SshRunner:
         # Receipts store a digest instead of the command itself to avoid
         # accidentally persisting sensitive command arguments.
         digest = hashlib.sha256(json.dumps(command, separators=(",", ":")).encode()).hexdigest()
+        auth = get_access_token()
         receipt = Receipt(
             request_id=request_id,
             host_id=host_id,
@@ -66,6 +72,9 @@ class SshRunner:
             stdout=proc.stdout[-16000:],
             stderr=proc.stderr[-8000:],
             command_digest=digest,
+            actor_subject=auth.subject if auth is not None else None,
+            client_id=auth.client_id if auth is not None else None,
+            scopes=list(auth.scopes) if auth is not None else None,
         )
         path = self.receipt_dir / f"{request_id}.json"
         path.write_text(json.dumps(asdict(receipt), indent=2, sort_keys=True) + "\n", encoding="utf-8")
