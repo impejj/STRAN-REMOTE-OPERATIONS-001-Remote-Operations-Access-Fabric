@@ -46,6 +46,8 @@ fi
 test -n "$USER_ID"
 "${KC[@]}" set-password -r "$REALM" --userid "$USER_ID" --new-password "$FOUNDER_PASS" >/dev/null
 unset FOUNDER_PASS FOUNDER_PASS_2 KC_BOOTSTRAP_ADMIN_PASSWORD KC_DB_PASSWORD
+"${KC[@]}" update "users/$USER_ID" -r "$REALM" -s 'requiredActions=["CONFIGURE_TOTP"]' >/dev/null
 echo "FOUNDER_PASSWORD_SET=PASS"
+echo "FOUNDER_TOTP_REQUIRED=PASS"
 echo "FOUNDER_EMAIL=$FOUNDER_EMAIL"
 echo "FOUNDER_USER_ID=$USER_ID"
