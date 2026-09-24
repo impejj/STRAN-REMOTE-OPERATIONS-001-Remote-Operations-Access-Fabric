@@ -41,7 +41,9 @@ echo "=== CLOUDFLARED SERVICE METADATA · REDACTED ==="
 echo
 echo "=== MANAGEMENT MODE HINT ==="
 EXEC_RAW="$(systemctl show cloudflared.service -p ExecStart --value 2>/dev/null || true)"
-if grep -Eq -- '(^|[[:space:]])--token([=[:space:]])' <<<"$EXEC_RAW"; then
+if grep -Eq -- '(^|[[:space:]])--token-file([=[:space:]])' <<<"$EXEC_RAW"; then
+  echo "CLOUDFLARED_MANAGEMENT_MODE=REMOTE_MANAGED_TOKEN_FILE"
+elif grep -Eq -- '(^|[[:space:]])--token([=[:space:]])' <<<"$EXEC_RAW"; then
   echo "CLOUDFLARED_MANAGEMENT_MODE=REMOTE_MANAGED_TOKEN"
 elif grep -Eq -- '(^|[[:space:]])(--config|-config)([=[:space:]])' <<<"$EXEC_RAW"; then
   echo "CLOUDFLARED_MANAGEMENT_MODE=CONFIG_FILE"
