@@ -16,7 +16,7 @@ echo "MODE=$MODE"
 echo "HOST=$(hostname -s)"
 echo "TIME=$(date -Is)"
 
-"$REPO_ROOT/deploy/native-auth/preflight.sh"
+bash "$REPO_ROOT/deploy/native-auth/preflight.sh"
 
 if [ "$MODE" = "plan" ]; then
   echo "PLAN_ONLY=PASS"
