@@ -14,6 +14,11 @@ from .policy import (
     require_repository,
     require_service,
 )
+from .cloudflare_access import (
+    CloudflareAccessConfig,
+    CloudflareAccessMiddleware,
+    CloudflareAccessVerifier,
+)
 from .ssh_runner import SshRunner
 
 
@@ -225,7 +230,22 @@ def run_gateway() -> None:
     if transport != "streamable-http":
         raise ValueError(f"unsupported SROF_MCP_TRANSPORT={transport!r}")
 
-    mcp.run(transport="streamable-http")
+    cf_config = CloudflareAccessConfig.from_env()
+    if not cf_config.required:
+        mcp.run(transport="streamable-http")
+        return
+
+    import uvicorn
+
+    settings = _mcp_runtime_settings()
+    app = mcp.streamable_http_app()
+    guarded = CloudflareAccessMiddleware(app, CloudflareAccessVerifier(cf_config))
+    uvicorn.run(
+        guarded,
+        host=str(settings["host"]),
+        port=int(settings["port"]),
+        log_level=os.environ.get("SROF_LOG_LEVEL", "info").lower(),
+    )
 
 
 if __name__ == "__main__":
