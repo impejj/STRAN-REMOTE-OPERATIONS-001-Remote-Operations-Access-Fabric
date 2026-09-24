@@ -1,0 +1,92 @@
+{
+  "realm": "scientiam-srof",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "resetPasswordAllowed": true,
+  "rememberMe": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "bruteForceProtected": true,
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 28800,
+  "offlineSessionIdleTimeout": 2592000,
+  "offlineSessionMaxLifespanEnabled": true,
+  "offlineSessionMaxLifespan": 5184000,
+  "clientScopes": [
+    {
+      "name": "srof:read",
+      "description": "Read-only access to the governed SCIENTIAM SROF MCP resource.",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "true",
+        "consent.screen.text": "Read governed SROF infrastructure state"
+      },
+      "protocolMappers": [
+        {
+          "name": "srof-resource-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "https://srof.scientiam.com.ar/mcp",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "defaultOptionalClientScopes": [
+    "offline_access",
+    "srof:read"
+  ],
+  "clientProfiles": {
+    "profiles": [
+      {
+        "name": "chatgpt-cimd-profile",
+        "description": "CIMD profile restricted to the official ChatGPT client metadata.",
+        "executors": [
+          {
+            "executor": "client-id-metadata-document",
+            "configuration": {
+              "cimd-allow-http-scheme": false,
+              "cimd-allow-permitted-domains": [
+                "chatgpt.com",
+                "persistent.oaistatic.com"
+              ],
+              "cimd-restrict-same-domain": false,
+              "only-allow-confidential-client": true
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "clientPolicies": {
+    "policies": [
+      {
+        "name": "chatgpt-cimd-policy",
+        "description": "Only HTTPS CIMD client IDs hosted on chatgpt.com may use the ChatGPT MCP profile.",
+        "enabled": true,
+        "conditions": [
+          {
+            "condition": "client-id-uri",
+            "configuration": {
+              "client-id-uri-scheme": "https",
+              "client-id-uri-allow-permitted-domains": [
+                "chatgpt.com"
+              ]
+            }
+          }
+        ],
+        "profiles": [
+          "chatgpt-cimd-profile"
+        ]
+      }
+    ]
+  }
+}
