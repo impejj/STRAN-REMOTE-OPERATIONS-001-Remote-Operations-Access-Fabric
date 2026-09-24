@@ -5,6 +5,8 @@ import os
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.auth.settings import AuthSettings
+from mcp.server.transport_security import TransportSecuritySettings
 
 from .policy import (
     HostPolicy,
@@ -20,6 +22,7 @@ from .cloudflare_access import (
     CloudflareAccessVerifier,
 )
 from .ssh_runner import SshRunner
+from .keycloak_auth import KeycloakJWTVerifier, OAuthRuntimeConfig
 
 
 def _mcp_runtime_settings() -> dict[str, object]:
@@ -30,7 +33,51 @@ def _mcp_runtime_settings() -> dict[str, object]:
     }
 
 
-mcp = FastMCP("SCIENTIAM Remote Operations Fabric", **_mcp_runtime_settings())
+def _transport_security() -> TransportSecuritySettings:
+    public_host = os.environ.get("SROF_PUBLIC_HOSTNAME", "srof.scientiam.com.ar").strip()
+    configured_origins = [
+        x.strip()
+        for x in os.environ.get(
+            "SROF_ALLOWED_ORIGINS",
+            "https://chatgpt.com https://srof.scientiam.com.ar",
+        ).replace(",", " ").split()
+        if x.strip()
+    ]
+    allowed_hosts = ["127.0.0.1:*", "localhost:*", "[::1]:*"]
+    if public_host:
+        allowed_hosts.extend([public_host, public_host + ":*"])
+    return TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=allowed_hosts,
+        allowed_origins=[
+            "http://127.0.0.1:*",
+            "http://localhost:*",
+            "http://[::1]:*",
+            *configured_origins,
+        ],
+    )
+
+
+_OAUTH_CONFIG = OAuthRuntimeConfig.from_env()
+_OAUTH_VERIFIER = KeycloakJWTVerifier(_OAUTH_CONFIG) if _OAUTH_CONFIG.required else None
+_OAUTH_SETTINGS = (
+    AuthSettings(
+        issuer_url=_OAUTH_CONFIG.issuer,
+        resource_server_url=_OAUTH_CONFIG.resource,
+        required_scopes=list(_OAUTH_CONFIG.required_scopes),
+        validate_token_resource=True,
+    )
+    if _OAUTH_CONFIG.required
+    else None
+)
+
+mcp = FastMCP(
+    "SCIENTIAM Remote Operations Fabric",
+    token_verifier=_OAUTH_VERIFIER,
+    auth=_OAUTH_SETTINGS,
+    transport_security=_transport_security(),
+    **_mcp_runtime_settings(),
+)
 HOSTS_FILE = Path(os.environ.get("SROF_HOSTS_FILE", "/etc/scientiam/remote-ops/hosts.json"))
 RECEIPTS = Path(os.environ.get("SROF_RECEIPT_DIR", "/var/lib/scientiam/remote-ops/receipts"))
 runner = SshRunner(RECEIPTS)
@@ -231,6 +278,10 @@ def run_gateway() -> None:
         raise ValueError(f"unsupported SROF_MCP_TRANSPORT={transport!r}")
 
     cf_config = CloudflareAccessConfig.from_env()
+    if _OAUTH_CONFIG.required and cf_config.required:
+        raise RuntimeError(
+            "SROF native OAuth and Cloudflare Access enforcement cannot both be enabled"
+        )
     if not cf_config.required:
         mcp.run(transport="streamable-http")
         return
