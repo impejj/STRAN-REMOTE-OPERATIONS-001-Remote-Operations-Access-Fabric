@@ -41,13 +41,13 @@ MCP client
 
 ## Managed OAuth note
 
-Cloudflare Access Managed OAuth is appropriate for non-browser MCP clients. When enabled for an MCP server application, the origin must validate the Access JWT delivered by Cloudflare in the `Cf-Access-Jwt-Assertion` header.
+Cloudflare Access Managed OAuth is appropriate for non-browser MCP clients. Access sends a signed JWT in the `Cf-Access-Jwt-Assertion` header. For this tunnel we enforce validation in `cloudflared` itself with `originRequest.access.required=true`, the Zero Trust team name and the Access application AUD tag. Cloudflare documents this as a supported origin control for L7 Tunnel traffic. The SROF application may additionally validate the header later as defense in depth, but it is not required for the first secure cutover when `cloudflared` validation is active.
 
-Therefore production activation has two gates:
+Production activation has two gates:
 
 ```text
 CLOUDFLARE_TUNNEL = PASS
-CLOUDFLARE_ACCESS_JWT_VALIDATION = PASS
+CLOUDFLARED_ACCESS_VALIDATION = PASS
 ```
 
 Do not switch the operational endpoint to LIVE before both pass.
@@ -78,7 +78,7 @@ When someone has server access:
 2. install/authenticate the tunnel credentials/token locally;
 3. map the tunnel to `http://127.0.0.1:8765`;
 4. keep SROF loopback-only;
-5. configure Access JWT verification in SROF;
+5. configure `originRequest.access` in cloudflared with `required: true`, Zero Trust team name and application AUD;
 6. run:
    ```bash
    SROF_PUBLIC_HOSTNAME=<hostname> deploy/cloudflare/preflight.sh
@@ -95,7 +95,7 @@ CLOUDFLARED_ACTIVE=PASS
 PUBLIC_HTTPS_MCP=PASS
 ACCESS_POLICY=PASS
 MANAGED_OAUTH=PASS
-ACCESS_JWT_VALIDATION=PASS
+CLOUDFLARED_ACCESS_VALIDATION=PASS
 MCP_TOOL_DISCOVERY=PASS
 HOST_SERVER=PASS
 HOST_THINKPAD=PASS
