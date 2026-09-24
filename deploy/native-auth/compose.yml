@@ -1,0 +1,53 @@
+services:
+  postgres:
+    image: postgres:17-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: ${KC_DB_USERNAME}
+      POSTGRES_PASSWORD: ${KC_DB_PASSWORD}
+    volumes:
+      - keycloak-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${KC_DB_USERNAME} -d keycloak"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks: [srof-auth]
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.4
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command:
+      - start
+      - --features=cimd
+      - --hostname=https://auth.scientiam.com.ar
+      - --http-enabled=true
+      - --proxy-headers=xforwarded
+      - --proxy-trusted-addresses=127.0.0.0/8,172.16.0.0/12
+      - --health-enabled=true
+      - --metrics-enabled=true
+      - --import-realm
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: ${KC_DB_USERNAME}
+      KC_DB_PASSWORD: ${KC_DB_PASSWORD}
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD}
+    volumes:
+      - ./realm-scientiam-srof.json:/opt/keycloak/data/import/realm-scientiam-srof.json:ro
+    ports:
+      - "127.0.0.1:8096:8080"
+      - "127.0.0.1:9006:9000"
+    networks: [srof-auth]
+
+volumes:
+  keycloak-postgres:
+
+networks:
+  srof-auth:
+    driver: bridge
