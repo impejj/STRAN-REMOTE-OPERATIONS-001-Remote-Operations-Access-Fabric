@@ -77,9 +77,8 @@ install -d -m 0755 /etc/cloudflared
 cat > "$UNIT_FILE" <<EOF
 [Unit]
 Description=Cloudflare Tunnel - SCIENTIAM SROF
-After=network-online.target scientiam-remote-ops-gateway.service
+After=network-online.target
 Wants=network-online.target
-Requires=scientiam-remote-ops-gateway.service
 
 [Service]
 Type=simple
