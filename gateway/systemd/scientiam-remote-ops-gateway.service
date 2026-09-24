@@ -15,6 +15,7 @@ Environment=SROF_MCP_HOST=127.0.0.1
 Environment=SROF_MCP_PORT=8765
 Environment=SROF_MCP_PATH=/mcp
 EnvironmentFile=-/etc/scientiam/remote-ops/cloudflare-access.env
+EnvironmentFile=-/etc/scientiam/remote-ops/srof-oauth.env
 ExecStart=/opt/scientiam/remote-ops-gateway/.venv/bin/python -m srof_gateway.server
 Restart=on-failure
 RestartSec=5
