@@ -15,6 +15,18 @@ services:
       retries: 12
     networks: [srof-auth]
 
+  auth-edge:
+    image: nginx:1.30.5-alpine
+    restart: unless-stopped
+    depends_on:
+      keycloak:
+        condition: service_started
+    volumes:
+      - ./nginx-srof-auth.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "127.0.0.1:8097:8080"
+    networks: [srof-auth]
+
   keycloak:
     image: quay.io/keycloak/keycloak:26.7.4
     restart: unless-stopped
