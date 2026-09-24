@@ -4,18 +4,30 @@ set -euo pipefail
 MODE="plan"
 SERVICE_USER="${SROF_SERVICE_USER:-scientiam-remoteops}"
 SERVICE_GROUP="${SROF_SERVICE_GROUP:-scientiam-remoteops}"
+SERVICE_HOME="${SROF_SERVICE_HOME:-/home/$SERVICE_USER}"
 ETC_DIR="${SROF_ETC_DIR:-/etc/scientiam/remote-ops}"
 HOSTS="${SROF_HOSTS_FILE:-$ETC_DIR/hosts.json}"
 STATE_DIR="${SROF_STATE_DIR:-/var/lib/scientiam/remote-ops}"
 RECEIPTS="${SROF_RECEIPT_DIR:-$STATE_DIR/receipts}"
 BACKUPS="$STATE_DIR/registry-backups"
 APP_DIR="${SROF_APP_DIR:-/opt/scientiam/remote-ops-gateway}"
-THINKPAD_HOST_ID="THINKPAD-E470"
+
 SERVER_HOST_ID="PROFESYS-SCIENTIAM"
+THINKPAD_HOST_ID="THINKPAD-E470"
+THINKPAD_IP="${THINKPAD_IP:-192.168.1.6}"
 THINKPAD_EXPECTED_HOSTNAME="${THINKPAD_EXPECTED_HOSTNAME:-thinkPad-E470}"
+THINKPAD_EXPECTED_HOSTKEY="${THINKPAD_EXPECTED_HOSTKEY:-SHA256:IlyXHNcmKV2hBq+oIny/tH+V6RC8QtQgBie8jEh0MBg}"
+THINKPAD_ALIAS="${THINKPAD_SSH_ALIAS:-thinkpad-e470-srof}"
 THINKPAD_ROOT="${THINKPAD_ALLOWED_ROOT:-/home/impejj/work/profesys}"
 THINKPAD_REPO="${THINKPAD_ALLOWED_REPOSITORY:-/home/impejj/work/profesys/scientiam}"
-THINKPAD_ALIAS="${THINKPAD_SSH_ALIAS:-}"
+
+GATEWAY_KEY="$SERVICE_HOME/.ssh/srof_gateway_to_thinkpad"
+SSH_CONFIG="$SERVICE_HOME/.ssh/config"
+KNOWN_HOSTS="$SERVICE_HOME/.ssh/known_hosts"
+
+# Existing proven operator transport. Used only to bootstrap the gateway's
+# independent public key onto the ThinkPad. The gateway never uses this key.
+OPERATOR_KEY="${SROF_OPERATOR_BOOTSTRAP_KEY:-/home/profesys/.ssh/stran_remoteops_server_to_thinkpad}"
 
 usage() {
   cat <<'EOF'
@@ -25,22 +37,30 @@ Usage:
 
 Default is PLAN/DIAGNOSTIC only.
 
---apply:
-  - verifies SERVER -> ThinkPad key-only SSH as scientiam-remoteops;
-  - backs up /etc/scientiam/remote-ops/hosts.json;
-  - upserts THINKPAD-E470 without replacing existing hosts;
-  - grants only capabilities proven by live read-only probes;
-  - executes SROF hosts_list and host_health for SERVER + ThinkPad;
-  - requires new durable receipts;
+The closure deliberately separates:
+  1) proven operator SERVER -> ThinkPad transport;
+  2) gateway-owned SERVER -> ThinkPad identity;
+  3) SROF host-registry enrollment;
+  4) SROF same-run host_health + durable receipts.
+
+--apply is fail-closed and reversible for the host registry. It:
+  - verifies the previously recorded ThinkPad ED25519 host fingerprint;
+  - verifies the existing operator public-key-only channel;
+  - creates/reuses a gateway-owned Ed25519 key under scientiam-remoteops;
+  - installs only that public key on ThinkPad scientiam-remoteops;
+  - installs a strict SSH alias for the gateway service account;
+  - verifies gateway-account key-only SSH;
+  - backs up hosts.json;
+  - upserts THINKPAD-E470 without replacing SERVER;
+  - grants FILESYSTEM/GIT only if live probes pass;
+  - executes hosts_list + host_health for SERVER and ThinkPad;
+  - requires two new durable SROF receipts;
   - restores the previous registry if the SROF smoke fails.
 
-Optional environment:
-  THINKPAD_SSH_ALIAS=<existing SSH Host alias>
-  THINKPAD_ALLOWED_ROOT=/home/impejj/work/profesys
-  THINKPAD_ALLOWED_REPOSITORY=/home/impejj/work/profesys/scientiam
-
-This script does NOT change SSH keys, sshd, firewall, sudoers, DCP,
-Cloudflare, GitHub Actions, or external exposure.
+This script does NOT:
+  - copy/reuse the operator private key for the gateway;
+  - change sshd, firewall, sudoers, DCP, Cloudflare or GitHub Actions;
+  - expose SSH or TCP/8765 publicly.
 EOF
 }
 
@@ -66,20 +86,20 @@ test "$(hostname -s)" = "profesys-scientiam"
 id "$SERVICE_USER" >/dev/null
 getent group "$SERVICE_GROUP" >/dev/null
 command -v ssh >/dev/null
+command -v ssh-keygen >/dev/null
+command -v ssh-keyscan >/dev/null
 command -v python3 >/dev/null
 test -x "$APP_DIR/.venv/bin/python"
 test -r "$HOSTS"
 python3 -m json.tool "$HOSTS" >/dev/null
 
-SSH_CONFIG="/home/$SERVICE_USER/.ssh/config"
-test -r "$SSH_CONFIG"
+install -d -m 0700 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "$SERVICE_HOME/.ssh"
 
 echo
 echo "=== CURRENT REGISTRY ==="
 python3 - "$HOSTS" <<'PY'
 import json,sys
-p=sys.argv[1]
-d=json.load(open(p,encoding="utf-8"))
+d=json.load(open(sys.argv[1],encoding="utf-8"))
 for h in d.get("hosts",[]):
     print("HOST_ID=%s SSH_ALIAS=%s LIFECYCLE=%s CAPABILITIES=%s" % (
         h.get("host_id"), h.get("ssh_alias"), h.get("lifecycle_state"),
@@ -87,53 +107,168 @@ for h in d.get("hosts",[]):
     ))
 PY
 
-discover_alias() {
-  if [ -n "$THINKPAD_ALIAS" ]; then
-    printf '%s\n' "$THINKPAD_ALIAS"
-    return 0
-  fi
-
-  mapfile -t aliases < <(
-    awk '
-      tolower($1)=="host" {
-        for (i=2;i<=NF;i++) {
-          if ($i !~ /[*?!]/ && tolower($i) ~ /thinkpad/) print $i
-        }
-      }
-    ' "$SSH_CONFIG" | awk '!seen[$0]++'
-  )
-
-  for alias in "${aliases[@]:-}"; do
-    [ -n "$alias" ] || continue
-    out="$(runuser -u "$SERVICE_USER" -- ssh -o BatchMode=yes -o PasswordAuthentication=no -- "$alias" 'hostname -s' 2>/dev/null || true)"
-    if [ "${out,,}" = "${THINKPAD_EXPECTED_HOSTNAME,,}" ]; then
-      printf '%s\n' "$alias"
-      return 0
-    fi
-  done
-
-  echo "BLOCKED: no verified ThinkPad SSH alias found in $SSH_CONFIG" >&2
-  if [ "${#aliases[@]}" -gt 0 ]; then
-    printf 'CANDIDATE_ALIAS=%s\n' "${aliases[@]}" >&2
-  fi
-  return 20
-}
-
-THINKPAD_ALIAS="$(discover_alias)"
 echo
-echo "THINKPAD_SSH_ALIAS=$THINKPAD_ALIAS"
+echo "=== THINKPAD HOST-KEY PIN ==="
+SCAN_FILE="$(mktemp)"
+trap 'rm -f "$SCAN_FILE"' EXIT
+ssh-keyscan -T 5 -t ed25519 "$THINKPAD_IP" 2>/dev/null > "$SCAN_FILE"
+test -s "$SCAN_FILE"
+OBSERVED_FP="$(ssh-keygen -lf "$SCAN_FILE" -E sha256 | awk 'NR==1{print $2}')"
+echo "THINKPAD_HOSTKEY_OBSERVED=$OBSERVED_FP"
+echo "THINKPAD_HOSTKEY_EXPECTED=$THINKPAD_EXPECTED_HOSTKEY"
+if [ "$OBSERVED_FP" != "$THINKPAD_EXPECTED_HOSTKEY" ]; then
+  echo "BLOCKED: ThinkPad host fingerprint mismatch" >&2
+  exit 21
+fi
+echo "THINKPAD_HOSTKEY_PIN=PASS"
 
 echo
-echo "=== SERVER -> THINKPAD SSH PROOF ==="
+echo "=== EXISTING OPERATOR CHANNEL PROOF ==="
+if [ ! -r "$OPERATOR_KEY" ]; then
+  echo "BLOCKED: proven operator bootstrap key not readable: $OPERATOR_KEY" >&2
+  exit 22
+fi
+
+OPERATOR_PROOF="$(ssh \
+  -i "$OPERATOR_KEY" \
+  -o IdentitiesOnly=yes \
+  -o BatchMode=yes \
+  -o PasswordAuthentication=no \
+  -o StrictHostKeyChecking=yes \
+  -o UserKnownHostsFile="$SCAN_FILE" \
+  -o ConnectTimeout=5 \
+  -- "$SERVICE_USER@$THINKPAD_IP" \
+  'printf "HOST=%s\nUSER=%s\n" "$(hostname -s)" "$(id -un)"')"
+printf '%s\n' "$OPERATOR_PROOF"
+grep -Fqi "HOST=$THINKPAD_EXPECTED_HOSTNAME" <<<"$OPERATOR_PROOF"
+grep -Fq "USER=$SERVICE_USER" <<<"$OPERATOR_PROOF"
+echo "OPERATOR_SERVER_TO_THINKPAD=PASS"
+
+gateway_ready=0
+if [ -r "$GATEWAY_KEY" ] && [ -r "$SSH_CONFIG" ]; then
+  if runuser -u "$SERVICE_USER" -- ssh \
+    -o BatchMode=yes \
+    -o PasswordAuthentication=no \
+    -o ConnectTimeout=5 \
+    -- "$THINKPAD_ALIAS" \
+    'test "$(id -un)" = "scientiam-remoteops" && hostname -s' 2>/dev/null \
+    | grep -Fqi "$THINKPAD_EXPECTED_HOSTNAME"; then
+    gateway_ready=1
+  fi
+fi
+
+echo
+echo "=== GATEWAY IDENTITY STATE ==="
+if [ "$gateway_ready" -eq 1 ]; then
+  echo "GATEWAY_TO_THINKPAD=PASS_EXISTING"
+else
+  echo "GATEWAY_TO_THINKPAD=NEEDS_BOOTSTRAP"
+  echo "GATEWAY_KEY=$GATEWAY_KEY"
+  echo "GATEWAY_ALIAS=$THINKPAD_ALIAS"
+fi
+
+if [ "$MODE" != "apply" ]; then
+  echo
+  echo "PLAN_ONLY=PASS"
+  if [ "$gateway_ready" -eq 1 ]; then
+    echo "NEXT=sudo $0 --apply"
+  else
+    echo "NEXT=sudo $0 --apply  # bootstraps gateway-owned key, then closes registry"
+  fi
+  exit 0
+fi
+
+if [ "$gateway_ready" -ne 1 ]; then
+  echo
+  echo "=== BOOTSTRAP GATEWAY-OWNED THINKPAD IDENTITY ==="
+
+  if [ ! -f "$GATEWAY_KEY" ]; then
+    runuser -u "$SERVICE_USER" -- ssh-keygen \
+      -t ed25519 -a 100 -N "" \
+      -f "$GATEWAY_KEY" \
+      -C "STRAN-REMOTE-OPERATIONS-001 gateway-to-thinkpad"
+    echo "GATEWAY_KEY_CREATED=YES"
+  else
+    echo "GATEWAY_KEY_CREATED=NO_REUSED"
+  fi
+  chown "$SERVICE_USER:$SERVICE_GROUP" "$GATEWAY_KEY" "$GATEWAY_KEY.pub"
+  chmod 0600 "$GATEWAY_KEY"
+  chmod 0644 "$GATEWAY_KEY.pub"
+
+  cat "$GATEWAY_KEY.pub" | ssh \
+    -i "$OPERATOR_KEY" \
+    -o IdentitiesOnly=yes \
+    -o BatchMode=yes \
+    -o PasswordAuthentication=no \
+    -o StrictHostKeyChecking=yes \
+    -o UserKnownHostsFile="$SCAN_FILE" \
+    -o ConnectTimeout=5 \
+    -- "$SERVICE_USER@$THINKPAD_IP" \
+    'set -eu
+     umask 077
+     mkdir -p "$HOME/.ssh"
+     touch "$HOME/.ssh/authorized_keys"
+     chmod 700 "$HOME/.ssh"
+     chmod 600 "$HOME/.ssh/authorized_keys"
+     IFS= read -r key
+     if grep -qxF "$key" "$HOME/.ssh/authorized_keys"; then
+       echo GATEWAY_PUBLIC_KEY_INSTALLED=NO_ALREADY_PRESENT
+     else
+       printf "%s\n" "$key" >> "$HOME/.ssh/authorized_keys"
+       echo GATEWAY_PUBLIC_KEY_INSTALLED=YES
+     fi'
+
+  touch "$KNOWN_HOSTS"
+  chown "$SERVICE_USER:$SERVICE_GROUP" "$KNOWN_HOSTS"
+  chmod 0600 "$KNOWN_HOSTS"
+  while IFS= read -r line; do
+    grep -qxF "$line" "$KNOWN_HOSTS" || printf '%s\n' "$line" >> "$KNOWN_HOSTS"
+  done < "$SCAN_FILE"
+
+  touch "$SSH_CONFIG"
+  chown "$SERVICE_USER:$SERVICE_GROUP" "$SSH_CONFIG"
+  chmod 0600 "$SSH_CONFIG"
+
+  CONFIG_TMP="$(mktemp)"
+  awk '
+    /^# BEGIN SCIENTIAM SROF THINKPAD$/ {skip=1; next}
+    /^# END SCIENTIAM SROF THINKPAD$/   {skip=0; next}
+    !skip {print}
+  ' "$SSH_CONFIG" > "$CONFIG_TMP"
+
+  cat >> "$CONFIG_TMP" <<EOF
+
+# BEGIN SCIENTIAM SROF THINKPAD
+Host $THINKPAD_ALIAS
+    HostName $THINKPAD_IP
+    User $SERVICE_USER
+    IdentityFile $GATEWAY_KEY
+    IdentitiesOnly yes
+    BatchMode yes
+    PasswordAuthentication no
+    StrictHostKeyChecking yes
+    UserKnownHostsFile $KNOWN_HOSTS
+    ServerAliveInterval 30
+    ServerAliveCountMax 3
+# END SCIENTIAM SROF THINKPAD
+EOF
+
+  install -m 0600 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "$CONFIG_TMP" "$SSH_CONFIG"
+  rm -f "$CONFIG_TMP"
+fi
+
+echo
+echo "=== GATEWAY ACCOUNT -> THINKPAD PROOF ==="
 SSH_PROOF="$(runuser -u "$SERVICE_USER" -- ssh \
   -o BatchMode=yes \
   -o PasswordAuthentication=no \
+  -o ConnectTimeout=5 \
   -- "$THINKPAD_ALIAS" \
   'printf "HOST=%s\nUSER=%s\n" "$(hostname -s)" "$(id -un)"')"
 printf '%s\n' "$SSH_PROOF"
 grep -Fqi "HOST=$THINKPAD_EXPECTED_HOSTNAME" <<<"$SSH_PROOF"
 grep -Fq "USER=$SERVICE_USER" <<<"$SSH_PROOF"
-echo "SERVER_TO_THINKPAD_SSH=PASS"
+echo "GATEWAY_TO_THINKPAD=PASS"
 
 echo
 echo "=== CAPABILITY PROBES ==="
@@ -162,13 +297,6 @@ else
 fi
 
 printf 'THINKPAD_CAPABILITIES=%s\n' "$(IFS=,; echo "${CAPS[*]}")"
-
-if [ "$MODE" != "apply" ]; then
-  echo
-  echo "PLAN_ONLY=PASS"
-  echo "NEXT=sudo $0 --apply"
-  exit 0
-fi
 
 install -d -m 0750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "$RECEIPTS"
 install -d -m 0750 -o root -g "$SERVICE_GROUP" "$BACKUPS"
@@ -200,7 +328,7 @@ entry={
     "allowed_repositories":json.loads(repos_json),
     "allowed_data_classes":["PUBLIC","SYNTHETIC","INTERNAL_LOW","CONFIDENTIAL"],
     "lifecycle_state":"AUTHORIZED",
-    "notes":"Registered by two-host closure after live SERVER->ThinkPad key-only SSH proof. Capabilities are probe-derived."
+    "notes":"Gateway-owned key-only SSH verified; capabilities are live probe-derived."
 }
 replaced=False
 for i,h in enumerate(hosts):
@@ -288,7 +416,8 @@ echo
 echo "RECEIPTS_BEFORE=$BEFORE"
 echo "RECEIPTS_AFTER=$AFTER"
 echo "SROF_TWO_HOST_REGISTRY=PASS"
-echo "SERVER_TO_THINKPAD_SSH=PASS"
+echo "OPERATOR_SERVER_TO_THINKPAD=PASS"
+echo "GATEWAY_TO_THINKPAD=PASS"
 echo "HOSTS_LIST_TWO_HOSTS=PASS"
 echo "HOST_HEALTH_SERVER=PASS"
 echo "HOST_HEALTH_THINKPAD=PASS"
