@@ -61,7 +61,7 @@ print("KEYCLOAK_CIMD=PASS")
 PY
 rm -f "$DISCOVERY"
 
-"$REPO_ROOT/deploy/native-auth/verify-keycloak-policy.sh"
+bash "$REPO_ROOT/deploy/native-auth/verify-keycloak-policy.sh"
 
 echo "=== PRE-DEPLOY TEST VENV ==="
 python3 -m venv "$TMP_VENV/venv"
@@ -77,7 +77,7 @@ echo "OAUTH_ENV_INSTALLED=PASS"
 
 echo "=== UPGRADE MANAGED GATEWAY ==="
 systemctl stop "$SERVICE"
-"$REPO_ROOT/deploy/remote-ops/prepare-gateway-server.sh" prepare
+bash "$REPO_ROOT/deploy/remote-ops/prepare-gateway-server.sh" prepare
 systemctl start "$SERVICE"
 
 for _ in $(seq 1 30); do
