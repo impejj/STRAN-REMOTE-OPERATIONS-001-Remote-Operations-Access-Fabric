@@ -59,7 +59,7 @@ with open(dst,"w",encoding="utf-8") as f:
     f.write("\n")
 PY
 
-"${KC[@]}" update client-policies/policies -r "$REALM" -f "$AFTER" >/dev/null
+cat "$AFTER" | "${KC[@]}" update client-policies/policies -r "$REALM" -f - >/dev/null
 echo "LIVE_POLICY_UPDATE=PASS"
 
 bash "$REPO_ROOT/deploy/native-auth/verify-keycloak-policy.sh"
