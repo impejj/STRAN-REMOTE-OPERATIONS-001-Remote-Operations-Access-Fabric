@@ -31,16 +31,8 @@ fi
 install -d -m 0750 -o root -g scientiam-remoteops /etc/scientiam/remote-ops
 
 if [ ! -f "$ENV_FILE" ]; then
-  DB_PASS="$(openssl rand -base64 36 | tr -d '\n')"
-  echo "Choose the Keycloak bootstrap admin password (minimum 16 characters)."
-  read -r -s -p "Admin password: " ADMIN_PASS
-  echo
-  read -r -s -p "Repeat admin password: " ADMIN_PASS_2
-  echo
-  if [ "$ADMIN_PASS" != "$ADMIN_PASS_2" ] || [ "${#ADMIN_PASS}" -lt 16 ]; then
-    echo "BLOCKED: passwords differ or are shorter than 16 characters" >&2
-    exit 10
-  fi
+  DB_PASS="$(openssl rand -hex 32)"
+  ADMIN_PASS="$(openssl rand -hex 32)"
   umask 077
   cat > "$ENV_FILE" <<EOF
 KC_DB_USERNAME=keycloak
@@ -48,10 +40,11 @@ KC_DB_PASSWORD=$DB_PASS
 KC_BOOTSTRAP_ADMIN_USERNAME=srof-admin
 KC_BOOTSTRAP_ADMIN_PASSWORD=$ADMIN_PASS
 EOF
-  unset DB_PASS ADMIN_PASS ADMIN_PASS_2
+  unset DB_PASS ADMIN_PASS
   chown root:scientiam-remoteops "$ENV_FILE"
   chmod 0640 "$ENV_FILE"
   echo "KEYCLOAK_ENV_CREATED=YES"
+  echo "KEYCLOAK_BOOTSTRAP_ADMIN_SECRET=GENERATED_LOCAL_NOT_PRINTED"
 else
   echo "KEYCLOAK_ENV_CREATED=NO_REUSED"
 fi
