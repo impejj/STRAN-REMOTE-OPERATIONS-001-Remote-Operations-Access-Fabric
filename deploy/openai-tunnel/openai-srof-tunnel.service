@@ -1,0 +1,26 @@
+[Unit]
+Description=OpenAI Secure MCP Tunnel for SCIENTIAM SROF
+After=network-online.target scientiam-remote-ops-gateway.service
+Wants=network-online.target
+Requires=scientiam-remote-ops-gateway.service
+
+[Service]
+Type=simple
+User=scientiam-remoteops
+Group=scientiam-remoteops
+EnvironmentFile=/etc/scientiam/remote-ops/openai-tunnel.env
+ExecStart=/usr/local/bin/tunnel-client run --profile srof-chatgpt
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/scientiam/remote-ops
+ReadOnlyPaths=/etc/scientiam/remote-ops
+CapabilityBoundingSet=
+LockPersonality=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target
