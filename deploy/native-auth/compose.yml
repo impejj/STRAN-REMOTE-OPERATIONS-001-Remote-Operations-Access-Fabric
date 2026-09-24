@@ -25,6 +25,14 @@ services:
       - ./nginx-srof-auth.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
       - "127.0.0.1:8097:8080"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -q -O /dev/null --header='Host: auth.scientiam.com.ar' http://127.0.0.1:8080/realms/scientiam-srof/.well-known/openid-configuration || exit 1
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
     networks: [srof-auth]
 
   keycloak:
