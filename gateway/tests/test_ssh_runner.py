@@ -1,6 +1,8 @@
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+from mcp.server.auth.provider import AccessToken
+
 from srof_gateway.ssh_runner import SshRunner
 
 
@@ -51,3 +53,25 @@ def test_receipt_dir_is_created_before_remote_execution(mock_run, tmp_path: Path
 
     assert receipt_dir.is_dir()
     assert (receipt_dir / f"{receipt.request_id}.json").is_file()
+
+
+@patch("srof_gateway.ssh_runner.get_access_token")
+@patch("srof_gateway.ssh_runner.subprocess.run")
+def test_runner_receipt_binds_oauth_actor(mock_run, get_token, tmp_path: Path):
+    mock_run.return_value = Mock(returncode=0, stdout="ok\n", stderr="")
+    get_token.return_value = AccessToken(
+        token="REDACTED",
+        client_id="https://chatgpt.com/oauth/client.json",
+        scopes=["srof:read"],
+        resource="https://srof.scientiam.com.ar/mcp",
+        subject="founder-123",
+    )
+
+    receipt = SshRunner(tmp_path).run_argv("SERVER", "server", "host_health", ["true"])
+
+    assert receipt.actor_subject == "founder-123"
+    assert receipt.client_id == "https://chatgpt.com/oauth/client.json"
+    assert receipt.scopes == ["srof:read"]
+    persisted = (tmp_path / f"{receipt.request_id}.json").read_text(encoding="utf-8")
+    assert "REDACTED" not in persisted
+    assert "founder-123" in persisted
