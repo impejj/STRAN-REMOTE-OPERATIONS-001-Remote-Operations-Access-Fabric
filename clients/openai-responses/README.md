@@ -26,22 +26,26 @@ SCIENTIAM client
 
 1. Python 3.11+.
 2. An OpenAI API key.
-3. An OAuth access token issued for the SROF resource/audience:
-   `https://srof.scientiam.com.ar/mcp`
-   with scope `srof:read`.
+3. The Keycloak native client `srof-openai-responses-cli` configured by
+   `deploy/native-auth/configure-openai-responses-client.sh`.
 4. An explicit `OPENAI_MODEL` value compatible with remote MCP in the Responses API.
 
-The adapter deliberately does not embed Keycloak credentials or automate MFA. Token acquisition belongs to the SROF OAuth/broker layer.
+By default the client performs Authorization Code + PKCE against the SROF Keycloak realm.
+The Founder completes password + TOTP in the browser; the callback is loopback-only and
+the access token remains in process memory. `SROF_ACCESS_TOKEN` is still accepted for
+controlled testing, but is not the normal P0 path.
 
 ## Acceptance probe
 
 ```bash
 export OPENAI_API_KEY='...'
 export OPENAI_MODEL='...'
-export SROF_ACCESS_TOKEN='...'
 
 python srof_openai_client.py --probe --json
 ```
+
+The default browser opens the SROF Keycloak login. Complete password + TOTP; the client
+then exchanges the authorization code using PKCE and immediately runs the read-only probe.
 
 Expected observed calls:
 
