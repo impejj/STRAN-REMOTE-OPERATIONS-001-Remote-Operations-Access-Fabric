@@ -55,6 +55,9 @@ jobs:
       - name: Compile
         working-directory: clients/openai-responses
         run: python3 -m py_compile srof_openai_client.py
+      - name: Validate Keycloak client bootstrap syntax
+        shell: bash
+        run: bash -n deploy/native-auth/configure-openai-responses-client.sh
       - name: Verify no remote transport
         shell: bash
         run: |
