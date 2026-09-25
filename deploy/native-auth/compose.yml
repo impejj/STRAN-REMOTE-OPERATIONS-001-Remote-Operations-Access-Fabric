@@ -45,7 +45,7 @@ services:
       - --hostname=https://auth.scientiam.com.ar
       - --http-enabled=true
       - --proxy-headers=xforwarded
-      - --proxy-trusted-addresses=127.0.0.0/8,172.16.0.0/12
+      - --proxy-trusted-addresses=127.0.0.0/8,${SROF_AUTH_PROXY_TRUSTED_SUBNET}
       - --health-enabled=true
       - --metrics-enabled=true
       - --import-realm
