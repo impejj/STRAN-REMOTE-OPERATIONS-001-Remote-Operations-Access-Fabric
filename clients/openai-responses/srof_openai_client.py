@@ -57,13 +57,41 @@ def require_env(name: str) -> str:
     return value
 
 
-def _get_json(url: str, timeout: int = 20) -> dict[str, Any]:
-    request = urllib.request.Request(url, headers={"Accept": "application/json"})
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        return json.load(response)
+HTTP_USER_AGENT = "SCIENTIAM-SROF-OpenAI-Client/0.1"
 
 
-def _post_form_json(url: str, form: dict[str, str], timeout: int = 20) -> dict[str, Any]:
+def _http_error_context(exc: urllib.error.HTTPError, phase: str, url: str) -> RuntimeError:
+    body = exc.read(1200).decode("utf-8", errors="replace").strip()
+    server = exc.headers.get("Server", "")
+    cf_ray = exc.headers.get("CF-Ray", "")
+    safe_body = body.replace("\n", " ")[:1200]
+    return RuntimeError(
+        f"{phase}_HTTP_{exc.code}: url={url} server={server!r} "
+        f"cf_ray={cf_ray!r} body={safe_body!r}"
+    )
+
+
+def _get_json(url: str, timeout: int = 20, phase: str = "HTTP_GET") -> dict[str, Any]:
+    request = urllib.request.Request(
+        url,
+        headers={
+            "Accept": "application/json",
+            "User-Agent": HTTP_USER_AGENT,
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return json.load(response)
+    except urllib.error.HTTPError as exc:
+        raise _http_error_context(exc, phase, url) from exc
+
+
+def _post_form_json(
+    url: str,
+    form: dict[str, str],
+    timeout: int = 20,
+    phase: str = "HTTP_POST",
+) -> dict[str, Any]:
     request = urllib.request.Request(
         url,
         data=urllib.parse.urlencode(form).encode("utf-8"),
@@ -71,10 +99,14 @@ def _post_form_json(url: str, form: dict[str, str], timeout: int = 20) -> dict[s
         headers={
             "Accept": "application/json",
             "Content-Type": "application/x-www-form-urlencoded",
+            "User-Agent": HTTP_USER_AGENT,
         },
     )
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        return json.load(response)
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return json.load(response)
+    except urllib.error.HTTPError as exc:
+        raise _http_error_context(exc, phase, url) from exc
 
 
 def _pkce_challenge(verifier: str) -> str:
@@ -91,7 +123,8 @@ def oauth_pkce_login(
     timeout: int = 300,
 ) -> str:
     issuer = issuer.rstrip("/")
-    discovery = _get_json(f"{issuer}/.well-known/openid-configuration")
+    discovery_url = f"{issuer}/.well-known/openid-configuration"
+    discovery = _get_json(discovery_url, phase="OIDC_DISCOVERY")
     if discovery.get("issuer", "").rstrip("/") != issuer:
         raise RuntimeError("OIDC discovery issuer mismatch")
     if "S256" not in (discovery.get("code_challenge_methods_supported") or []):
@@ -186,6 +219,7 @@ def oauth_pkce_login(
             "redirect_uri": redirect_uri,
             "code_verifier": verifier,
         },
+        phase="TOKEN_EXCHANGE",
     )
     access_token = token_response.get("access_token")
     if not isinstance(access_token, str) or not access_token:
