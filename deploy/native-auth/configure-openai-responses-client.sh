@@ -19,11 +19,27 @@ set -a
 . "$ENV_FILE"
 set +a
 
-KC=(docker compose --env-file "$ENV_FILE" -f "$COMPOSE" exec -T keycloak /opt/keycloak/bin/kcadm.sh)
-"${KC[@]}" config credentials   --server http://localhost:8080   --realm master   --user "$KC_BOOTSTRAP_ADMIN_USERNAME"   --password "$KC_BOOTSTRAP_ADMIN_PASSWORD" >/dev/null
+KC_EXEC=(docker compose --env-file "$ENV_FILE" -f "$COMPOSE" exec -T keycloak)
+KC=("${KC_EXEC[@]}" /opt/keycloak/bin/kcadm.sh)
+
+"${KC[@]}" config credentials \
+  --server http://localhost:8080 \
+  --realm master \
+  --user "$KC_BOOTSTRAP_ADMIN_USERNAME" \
+  --password "$KC_BOOTSTRAP_ADMIN_PASSWORD" >/dev/null
 
 TMP="$(mktemp)"
-trap 'rm -f "$TMP"' EXIT
+READBACK=""
+CONTAINER_TMP="/tmp/srof-openai-client-$$.json"
+
+cleanup() {
+  rm -f "$TMP"
+  if [ -n "$READBACK" ]; then
+    rm -f "$READBACK"
+  fi
+  "${KC_EXEC[@]}" rm -f "$CONTAINER_TMP" >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
 
 python3 - "$TMP" "$CLIENT_ID" "$REDIRECT_URI" <<'PY'
 import json,sys
@@ -51,20 +67,23 @@ payload={
 json.dump(payload,open(path,"w",encoding="utf-8"),indent=2)
 PY
 
+# kcadm runs inside the Keycloak container. A host /tmp path is not visible there,
+# so copy the non-secret client JSON through stdin to a container-local path first.
+"${KC_EXEC[@]}" sh -c 'cat > "$1"' sh "$CONTAINER_TMP" < "$TMP"
+
 CLIENT_UUID="$("${KC[@]}" get clients -r "$REALM" -q "clientId=$CLIENT_ID" --fields id,clientId --format csv --noquotes 2>/dev/null | awk -F, -v c="$CLIENT_ID" '$2==c{print $1; exit}')"
 if [ -z "$CLIENT_UUID" ]; then
-  "${KC[@]}" create clients -r "$REALM" -f "$TMP" >/dev/null
+  "${KC[@]}" create clients -r "$REALM" -f "$CONTAINER_TMP" >/dev/null
   CLIENT_UUID="$("${KC[@]}" get clients -r "$REALM" -q "clientId=$CLIENT_ID" --fields id,clientId --format csv --noquotes | awk -F, -v c="$CLIENT_ID" '$2==c{print $1; exit}')"
   echo "OPENAI_SROF_CLIENT_CREATED=YES"
 else
-  "${KC[@]}" update "clients/$CLIENT_UUID" -r "$REALM" -f "$TMP" >/dev/null
+  "${KC[@]}" update "clients/$CLIENT_UUID" -r "$REALM" -f "$CONTAINER_TMP" >/dev/null
   echo "OPENAI_SROF_CLIENT_CREATED=NO_UPDATED"
 fi
 
 test -n "$CLIENT_UUID"
 
 READBACK="$(mktemp)"
-trap 'rm -f "$TMP" "$READBACK"' EXIT
 "${KC[@]}" get "clients/$CLIENT_UUID" -r "$REALM" > "$READBACK"
 
 python3 - "$READBACK" "$CLIENT_ID" "$REDIRECT_URI" <<'PY'
