@@ -7,8 +7,10 @@ Prove OpenAI API -> SROF MCP -> governed OpenSSH on both canonical hosts.
 ## Preflight
 
 - SROF endpoint is reachable at `https://srof.scientiam.com.ar/mcp`.
+- Run `sudo deploy/native-auth/configure-openai-responses-client.sh` once on PROFESYS-SCIENTIAM.
 - Keycloak/SROF OAuth issues a token with `srof:read` and SROF audience.
-- `OPENAI_API_KEY`, `OPENAI_MODEL` and `SROF_ACCESS_TOKEN` are injected through the runtime secret plane.
+- `OPENAI_API_KEY` and `OPENAI_MODEL` are injected through the runtime secret plane.
+- The Founder completes browser password + TOTP; the PKCE access token stays in memory.
 - No secret is copied into Git or durable chat artifacts.
 
 ## Execute
@@ -17,6 +19,7 @@ From `clients/openai-responses`:
 
 ```bash
 python srof_openai_client.py --probe --json
+# Browser opens -> Founder password + TOTP -> loopback callback -> token exchange -> live probe
 ```
 
 ## PASS
