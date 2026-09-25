@@ -5,6 +5,7 @@ on:
   pull_request:
     paths:
       - "gateway/**"
+      - "clients/**"
       - "docs/**"
       - "deploy/**"
       - "registry/**"
@@ -37,6 +38,12 @@ jobs:
         run: .venv/bin/pytest -q
       - name: Compile gateway
         run: .venv/bin/python -m compileall src
+      - name: OpenAI SROF client unit tests
+        working-directory: clients/openai-responses
+        run: python3 -m unittest discover -s tests -v
+      - name: Compile OpenAI SROF client
+        working-directory: clients/openai-responses
+        run: python3 -m py_compile srof_openai_client.py
       - name: Validate remote-ops shell syntax
         shell: bash
         run: |
