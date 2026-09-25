@@ -1,132 +1,133 @@
-# SROF Native OAuth — no-card architecture
+# SROF Native OAuth — canonical production architecture
 
-**Status:** PREPARED / LOCAL-FIRST / NOT PUBLIC
+**Status:** ACTIVE / REMOTE-OAUTH-READY  
+**Decision:** Cloudflare Tunnel is transport only. PROFESYS owns authentication and authorization through Keycloak.
 
-## Decision
-
-Cloudflare Tunnel remains the HTTPS transport, but Cloudflare Access / Zero Trust
-is not used. Authentication and authorization are owned by PROFESYS.
+## Architecture
 
 ```text
-ChatGPT / MCP client
+Authorized MCP client
   -> https://srof.scientiam.com.ar/mcp
-  -> Cloudflare Tunnel (transport only)
-  -> SROF Resource Server
-       -> OAuth bearer validation
-       -> RFC 9728 Protected Resource Metadata
-       -> exact issuer / audience / scope validation
-       -> governed SROF host policy
-       -> audited receipt
-  -> OpenSSH
+  -> Cloudflare Tunnel
+  -> SROF OAuth Resource Server
+       -> JWT verification
+       -> RFC 9728 metadata
+       -> issuer/audience/expiry/subject/scope validation
+       -> host policy
+       -> actor-bound receipt
+  -> governed OpenSSH
   -> SERVER / THINKPAD
 
 OAuth authorization
   -> https://auth.scientiam.com.ar
-  -> same dedicated Cloudflare Tunnel
+  -> auth-edge allowlist
   -> Keycloak 26.7.4
-  -> loopback 127.0.0.1:8096
 ```
 
-## Identity and standards
+Cloudflare Access / Zero Trust is not used.
 
-Authorization Server: Keycloak 26.7.4.
+## Identity contract
 
-SROF is an OAuth Resource Server only. It never issues bearer tokens.
+- issuer: `https://auth.scientiam.com.ar/realms/scientiam-srof`
+- resource/audience: `https://srof.scientiam.com.ar/mcp`
+- required scope: `srof:read`
+- algorithms: RS256
+- PKCE S256: enabled
+- CIMD: enabled
+- Founder MFA: password + TOTP
 
-Required token properties:
-- signature valid through Keycloak JWKS;
-- issuer exactly `https://auth.scientiam.com.ar/realms/scientiam-srof`;
-- audience exactly includes `https://srof.scientiam.com.ar/mcp`;
-- unexpired token;
-- subject present;
-- scope `srof:read`.
+SROF is an OAuth Resource Server only and never issues bearer tokens.
 
-MCP SDK authorization is configured with:
-- `TokenVerifier`;
-- `AuthSettings.issuer_url`;
-- `AuthSettings.resource_server_url`;
-- `required_scopes=["srof:read"]`;
-- `validate_token_resource=True`.
+## Current infrastructure
 
-The SDK supplies the RFC 9728 metadata endpoint at:
+- SROF local listener: `127.0.0.1:8765`
+- Keycloak direct/local: `127.0.0.1:8096`
+- Keycloak health: `127.0.0.1:9006`
+- public auth edge: `127.0.0.1:8097`
+- dedicated Cloudflare tunnel publishes:
+  - `srof.scientiam.com.ar -> http://127.0.0.1:8765`
+  - `auth.scientiam.com.ar -> http://127.0.0.1:8097`
 
-`/.well-known/oauth-protected-resource/mcp`
+The auth-edge blocks Keycloak admin, master realm, other realms and root from the public surface.
 
-## Keycloak / MCP compatibility
+Keycloak trusts only loopback plus the dynamically discovered Docker subnet containing auth-edge.
 
-Keycloak currently does not natively bind MCP's RFC 8707 `resource` parameter.
-The official Keycloak MCP guidance recommends using an optional OAuth scope with
-an Audience mapper as the binding workaround.
+## MCP compatibility
 
-For SROF:
-- optional scope: `srof:read`;
-- custom audience: `https://srof.scientiam.com.ar/mcp`;
-- SROF verifies that audience exactly.
+Keycloak 26.7.x does not natively bind MCP RFC 8707 resource indicators in the way the MCP server requires.
 
-## ChatGPT client registration
+Canonical workaround:
+- optional OAuth scope: `srof:read`
+- Audience mapper injects:
+  `https://srof.scientiam.com.ar/mcp`
+- SROF validates that audience exactly.
 
-CIMD is enabled in Keycloak.
+## ChatGPT CIMD policy
 
-Only HTTPS client IDs hosted on `chatgpt.com` match the SROF CIMD policy.
-The profile accepts metadata URLs only on:
-- `chatgpt.com`;
-- `persistent.oaistatic.com` (official ChatGPT logo URI).
+CIMD is enabled.
 
-The profile requires a confidential client. ChatGPT's current CIMD metadata
-uses `private_key_jwt` and publishes a JWKS URI.
+Client-ID URI condition:
+- scheme: `["https"]`
+- trusted client-id domain: `chatgpt.com`
 
-## Founder authentication
+Allowed metadata domains in the CIMD profile:
+- `chatgpt.com`
+- `persistent.oaistatic.com`
 
-The Keycloak bootstrap administrator is machine-generated and stored only in
-the root-controlled local env file.
+Confidential client is required.
 
-The Founder gets a separate user account:
-- password entered through a hidden prompt;
-- TOTP enrollment required on first login;
-- brute-force protection enabled at realm level.
+## Human authentication
+
+Founder:
+- dedicated realm user;
+- permanent password;
+- TOTP enrollment completed;
+- no pending required action.
 
 ## Audit
 
 SROF receipts persist:
+
 - request ID;
-- target host;
+- host ID;
 - operation;
-- exit status;
+- timestamps;
+- exit code;
 - bounded stdout/stderr;
 - command digest;
 - OAuth subject;
 - OAuth client ID;
 - scopes.
 
-Bearer tokens and full claims are never written to receipts.
+Bearer token and full claims are not persisted.
 
-## Network invariants
+## Network/security invariants
 
-Before public cutover:
-- Keycloak app: `127.0.0.1:8096`;
-- Keycloak health: `127.0.0.1:9006`;
-- SROF: `127.0.0.1:8765`;
-- PostgreSQL: Docker-internal only;
 - no public SSH;
 - no public TCP/8765;
-- existing `gastos-mama` tunnel untouched.
+- Cloudflare Tunnel outbound-only;
+- Keycloak admin local-only;
+- SROF listener loopback-only;
+- PostgreSQL Docker-internal;
+- no Cloudflare Access;
+- no DCP;
+- no GitHub Actions transport;
+- no arbitrary shell from MCP prompts.
 
-## Activation order
+## Current readiness
 
-1. Validate committed assets.
-2. Run read-only preflight.
-3. Deploy Keycloak locally.
-4. Read back realm scope, audience, CIMD profile and policy.
-5. Create Founder user and require TOTP.
-6. Upgrade SROF to MCP SDK 1.30.x and activate OAuth locally.
-7. Require anonymous `/mcp` = 401.
-8. Require RFC 9728 metadata = expected issuer/resource/scope.
-9. Only then publish the OAuth and MCP routes through the dedicated SROF tunnel.
-10. Complete a real ChatGPT OAuth flow and require an actor-bound SROF receipt.
+```text
+CLOUDFLARE_DEDICATED_TUNNEL = PASS
+SROF_REMOTE_ROUTE = PASS
+AUTH_REMOTE_ROUTE = PASS
+OIDC_DISCOVERY = PASS
+PKCE_S256 = PASS
+CIMD = PASS
+ANONYMOUS_MCP_DENY = PASS
+RFC9728_METADATA = PASS
+FOUNDER_TOTP = PASS
+SROF_READONLY_TOOL_SURFACE = IMPLEMENTED
 
-## Rollback
-
-If local SROF OAuth activation fails, the activation helper moves the OAuth env
-out of the active path and restarts the gateway in its prior local mode.
-
-Cloudflare routes are not created by the local activation helpers.
+CHATGPT_BINDING = PER-RUNTIME / PRODUCT GATE
+MUTATION_TOOLS = NOT EXPOSED
+```
