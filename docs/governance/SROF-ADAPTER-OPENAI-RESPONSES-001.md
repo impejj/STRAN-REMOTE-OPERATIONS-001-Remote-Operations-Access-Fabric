@@ -44,12 +44,16 @@ No mutation tool is permitted by this adapter.
 
 ## Secret boundary
 
-Required runtime secrets:
+Required persistent runtime secret:
 
 - `OPENAI_API_KEY`
-- `SROF_ACCESS_TOKEN`
 
-They MUST remain outside Git, prompts, receipts and ordinary logs.
+SROF authentication uses Founder Authorization Code + PKCE through the static native client
+`srof-openai-responses-cli`. Password, TOTP, authorization code and bearer token MUST remain
+outside Git, prompts, receipts and ordinary logs. The bearer remains in process memory.
+
+For controlled diagnostics, `SROF_ACCESS_TOKEN` may be injected through the secret plane,
+but it is not the normal P0 login path.
 
 The SROF token must be issued for:
 
@@ -62,7 +66,8 @@ The SROF token must be issued for:
 ```text
 CLIENT_CODE = PASS
 OPENAI_API_CREDENTIAL = REQUIRED_AT_RUNTIME
-SROF_OAUTH_TOKEN = REQUIRED_AT_RUNTIME
+SROF_PKCE_CLIENT_CONFIG = IMPLEMENTED / DEPLOY_REQUIRED
+FOUNDER_PASSWORD_TOTP_FLOW = IMPLEMENTED_CLIENT_SIDE / LIVE_VALIDATION_REQUIRED
 OPENAI_MCP_TOOL_IMPORT = PENDING_LIVE_PROBE
 hosts_list = PENDING_LIVE_PROBE
 host_health(PROFESYS-SCIENTIAM) = PENDING_LIVE_PROBE
