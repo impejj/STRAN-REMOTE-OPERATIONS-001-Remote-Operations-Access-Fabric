@@ -10,6 +10,13 @@ SPEC.loader.exec_module(client)
 
 
 class ClientTests(unittest.TestCase):
+    def test_pkce_challenge_matches_rfc7636(self):
+        verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+        self.assertEqual(
+            client._pkce_challenge(verifier),
+            "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+        )
+
     def test_normalize_bearer(self):
         self.assertEqual(client.normalize_bearer("abc"), "Bearer abc")
         self.assertEqual(client.normalize_bearer("Bearer abc"), "Bearer abc")
