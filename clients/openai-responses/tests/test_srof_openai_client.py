@@ -17,10 +17,6 @@ class ClientTests(unittest.TestCase):
             "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
         )
 
-    def test_normalize_bearer(self):
-        self.assertEqual(client.normalize_bearer("abc"), "Bearer abc")
-        self.assertEqual(client.normalize_bearer("Bearer abc"), "Bearer abc")
-
     def test_build_request_is_read_only_and_bound_to_srof(self):
         payload = client.build_request(
             prompt="probe",
@@ -33,7 +29,7 @@ class ClientTests(unittest.TestCase):
         tool = payload["tools"][0]
         self.assertEqual(tool["type"], "mcp")
         self.assertEqual(tool["server_url"], "https://srof.scientiam.com.ar/mcp")
-        self.assertEqual(tool["authorization"], "Bearer token")
+        self.assertEqual(tool["authorization"], "token")
         self.assertEqual(tool["require_approval"], "never")
         self.assertIn("hosts_list", tool["allowed_tools"])
         self.assertNotIn("shell", tool["allowed_tools"])
