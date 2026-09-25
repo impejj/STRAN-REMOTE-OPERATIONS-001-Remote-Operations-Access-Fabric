@@ -38,13 +38,25 @@ jobs:
         run: .venv/bin/pytest -q
       - name: Compile gateway
         run: .venv/bin/python -m compileall src
-      - name: OpenAI SROF client unit tests
-        working-directory: clients/openai-responses
-        run: python3 -m unittest discover -s tests -v
-      - name: Compile OpenAI SROF client
-        working-directory: clients/openai-responses
-        run: python3 -m py_compile srof_openai_client.py
       - name: Validate remote-ops shell syntax
         shell: bash
         run: |
           bash -n ../deploy/remote-ops/*.sh
+
+  client-static:
+    name: OpenAI SROF client static
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unit tests
+        working-directory: clients/openai-responses
+        run: python3 -m unittest discover -s tests -v
+      - name: Compile
+        working-directory: clients/openai-responses
+        run: python3 -m py_compile srof_openai_client.py
+      - name: Verify no remote transport
+        shell: bash
+        run: |
+          ! grep -R -E 'ssh |scp |rsync |desktop.commander|GitHub Actions transport' clients/openai-responses/*.py
+          echo "STATIC_ONLY_NO_REMOTE_TRANSPORT=PASS"
