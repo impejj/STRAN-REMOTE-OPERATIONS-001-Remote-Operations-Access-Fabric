@@ -115,6 +115,37 @@ def execute(req: dict) -> dict:
         repo = validate_repo(args.get("repository", ""))
         return ssh(["git", "-C", repo, "status", "--short", "--branch"], 25)
 
+    if op == "fase0_probe":
+        repo = "/home/impejj/work/profesys/scientiam"
+        script = """
+set -e
+cd /home/impejj/work/profesys/scientiam
+echo "=== SROF FASE0 WORKER PROBE ==="
+echo "HOST=$(hostname -s)"
+echo "USER=$(id -un)"
+echo "HEAD=$(git rev-parse --short HEAD)"
+echo "=== REQUIRED FILES ==="
+for f in \
+  services/agent-control-plane/app/work_generation/contracts.py \
+  services/agent-control-plane/app/work_generation/engine.py \
+  services/agent-control-plane/app/software_factory/worker.py \
+  tools/agent_governance/agent_governance/technical_resolver.py \
+  docs/20_standards/worker-certification/STD-SC-WORKER-CERTIFICATION-001.md \
+  platform/infrastructure/docker/stacks/scientiam-prefect-dev/docker-compose.yml
+do
+  test -f "$f"
+  echo "PRESENT=$f"
+done
+echo "=== TESTS ==="
+python3 -m pytest -q \
+  services/agent-control-plane/tests/test_work_generation_engine.py \
+  services/agent-control-plane/tests/test_software_factory_worker.py \
+  tools/worker_certification/test_worker_certification.py \
+  tools/agent_governance/tests/test_technical_resolver.py
+echo "SROF_FASE0_PROBE=PASS"
+"""
+        return ssh(["bash", "-lc", script], 180)
+
     raise ValueError(f"OPERATION_DENIED:{op}")
 
 
@@ -175,7 +206,7 @@ class Handler(BaseHTTPRequestHandler):
                 "service": "srof-relay-poc",
                 "worker": "docker",
                 "target": "THINKPAD-E470",
-                "operations": ["host_health", "git_status"],
+                "operations": ["host_health", "git_status", "fase0_probe"],
             })
             return
 
