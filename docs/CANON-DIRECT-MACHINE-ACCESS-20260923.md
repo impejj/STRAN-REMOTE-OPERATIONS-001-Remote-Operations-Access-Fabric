@@ -28,7 +28,7 @@ The canonical access model is direct machine access through the STRAN/SROF fabri
 
 Every new or continued operational chat should hydrate this rule before executing infrastructure work:
 
-> Remote access canon: ChatGPT / APPDEV → STRAN/SROF → governed OpenSSH → ThinkPad / SERVER. DCP is retired. GitHub Actions is not a remote transport. If SROF is not exposed in the current runtime, declare TOOLING_GAP.
+> Remote access canon: ChatGPT / APPDEV → SCIENTIAM SROF MCP → https://srof.scientiam.com.ar/mcp → Cloudflare Tunnel (transport only) → SROF native OAuth → governed OpenSSH → ThinkPad / SERVER. OAuth authority is https://auth.scientiam.com.ar/realms/scientiam-srof and required scope is srof:read. DCP is retired. GitHub Actions is not remote transport. If SROF is not exposed in the current runtime, declare TOOLING_GAP. See docs/governance/SROF-CHAT-RUNTIME-CONTRACT.md.
 
 ## Scope
 
