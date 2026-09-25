@@ -4,12 +4,16 @@ set -euo pipefail
 SERVICE="cloudflared-scientiam-srof.service"
 EXPECTED_HOSTNAME="${SROF_PUBLIC_HOSTNAME:-srof.scientiam.com.ar}"
 EXPECTED_ORIGIN="http://127.0.0.1:8765"
+EXPECTED_AUTH_HOSTNAME="${SROF_AUTH_HOSTNAME:-auth.scientiam.com.ar}"
+EXPECTED_AUTH_ORIGIN="http://127.0.0.1:8097"
 
 echo "=== STRAN/SROF · VERIFY DEDICATED CLOUDFLARE TUNNEL ==="
 echo "HOST=$(hostname -s)"
 echo "TIME=$(date -Is)"
 echo "EXPECTED_HOSTNAME=$EXPECTED_HOSTNAME"
 echo "EXPECTED_ORIGIN=$EXPECTED_ORIGIN"
+echo "EXPECTED_AUTH_HOSTNAME=$EXPECTED_AUTH_HOSTNAME"
+echo "EXPECTED_AUTH_ORIGIN=$EXPECTED_AUTH_ORIGIN"
 
 systemctl is-active --quiet "$SERVICE"
 echo "DEDICATED_TUNNEL_SERVICE=PASS"
@@ -18,9 +22,9 @@ TMP="$(mktemp)"
 trap 'rm -f "$TMP"' EXIT
 journalctl -u "$SERVICE" --no-pager -n 5000 -o cat > "$TMP" 2>/dev/null || true
 
-python3 - "$TMP" "$EXPECTED_HOSTNAME" "$EXPECTED_ORIGIN" <<'PY'
+python3 - "$TMP" "$EXPECTED_HOSTNAME" "$EXPECTED_ORIGIN" "$EXPECTED_AUTH_HOSTNAME" "$EXPECTED_AUTH_ORIGIN" <<'PY'
 import json,re,sys
-path,expected_host,expected_origin=sys.argv[1:]
+path,expected_host,expected_origin,expected_auth_host,expected_auth_origin=sys.argv[1:]
 lines=open(path,encoding="utf-8",errors="replace").read().splitlines()
 update=None
 for line in reversed(lines):
@@ -53,6 +57,10 @@ if (expected_host,expected_origin) not in pairs:
     print("SROF_INGRESS_MATCH=FAIL")
     raise SystemExit(23)
 print("SROF_INGRESS_MATCH=PASS")
+if (expected_auth_host,expected_auth_origin) not in pairs:
+    print("AUTH_INGRESS_MATCH=FAIL")
+    raise SystemExit(25)
+print("AUTH_INGRESS_MATCH=PASS")
 for h,s in pairs:
     if h=="<catch_all>" and s!="http_status:404":
         print("CATCH_ALL_POLICY=FAIL")
@@ -61,5 +69,6 @@ print("CATCH_ALL_POLICY=PASS")
 PY
 
 echo "DEDICATED_CLOUDFLARE_TUNNEL=PASS"
+echo "SROF_AND_AUTH_INGRESS=PASS"
 echo "DCP_USED=NO"
 echo "GITHUB_ACTIONS_TRANSPORT=NO"
