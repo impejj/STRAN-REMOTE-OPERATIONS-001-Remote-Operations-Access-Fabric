@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import sqlite3
 import subprocess
 import threading
@@ -77,7 +78,7 @@ def validate_repo(path: str) -> str:
 
 
 def ssh(argv: list[str], timeout: int = 30) -> dict:
-    remote = " ".join(subprocess.list2cmdline([x]) for x in argv)
+    remote = " ".join(shlex.quote(x) for x in argv)
     cmd = [
         "ssh",
         "-i", SSH_KEY,
