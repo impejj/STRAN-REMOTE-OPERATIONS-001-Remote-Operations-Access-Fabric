@@ -103,6 +103,20 @@ def post_json(url: str, *, api_key: str, payload: dict[str, Any], timeout: int) 
         raise RuntimeError(f"OpenAI API transport error: {exc}") from exc
 
 
+def _extract_output_text(response: dict[str, Any]) -> str | None:
+    if response.get("output_text"):
+        return str(response["output_text"])
+
+    chunks: list[str] = []
+    for item in response.get("output", []) or []:
+        if item.get("type") != "message":
+            continue
+        for content in item.get("content", []) or []:
+            if content.get("type") in {"output_text", "text"} and content.get("text"):
+                chunks.append(str(content["text"]))
+    return "\n".join(chunks) or None
+
+
 def collect_mcp_events(response: dict[str, Any]) -> dict[str, Any]:
     discovered: list[str] = []
     calls: list[dict[str, Any]] = []
@@ -132,8 +146,29 @@ def collect_mcp_events(response: dict[str, Any]) -> dict[str, Any]:
         "discovered_tools": sorted(set(discovered)),
         "calls": calls,
         "errors": errors,
-        "output_text": response.get("output_text"),
+        "output_text": _extract_output_text(response),
     }
+
+
+def called_host_health_targets(summary: dict[str, Any]) -> set[str]:
+    targets: set[str] = set()
+    for call in summary.get("calls", []):
+        if call.get("name") != "host_health":
+            continue
+        raw = call.get("arguments")
+        if isinstance(raw, dict):
+            args = raw
+        elif isinstance(raw, str):
+            try:
+                args = json.loads(raw)
+            except json.JSONDecodeError:
+                continue
+        else:
+            continue
+        host_id = args.get("host_id")
+        if isinstance(host_id, str) and host_id:
+            targets.add(host_id)
+    return targets
 
 
 def probe_prompt(hosts: list[str]) -> str:
@@ -226,9 +261,12 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.probe:
         called = [call.get("name") for call in summary["calls"]]
-        if "hosts_list" not in called or "host_health" not in called:
+        health_targets = called_host_health_targets(summary)
+        missing_hosts = sorted(set(hosts) - health_targets)
+        if "hosts_list" not in called or missing_hosts:
             print(
-                "ACCEPTANCE_FAILED: expected hosts_list and host_health MCP calls were not both observed",
+                "ACCEPTANCE_FAILED: expected hosts_list and host_health for every requested host; "
+                f"missing_hosts={missing_hosts}",
                 file=sys.stderr,
             )
             return 5
