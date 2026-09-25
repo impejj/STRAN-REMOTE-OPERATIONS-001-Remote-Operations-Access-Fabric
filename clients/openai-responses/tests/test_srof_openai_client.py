@@ -44,6 +44,18 @@ class ClientTests(unittest.TestCase):
                     "error": None,
                     "server_label": "scientiam_srof",
                 },
+                {
+                    "type": "mcp_call",
+                    "name": "host_health",
+                    "arguments": "{\"host_id\":\"PROFESYS-SCIENTIAM\"}",
+                    "output": "{\"ok\":true}",
+                    "error": None,
+                    "server_label": "scientiam_srof",
+                },
+                {
+                    "type": "message",
+                    "content": [{"type": "output_text", "text": "healthy"}],
+                },
             ],
         }
         summary = client.collect_mcp_events(response)
@@ -51,6 +63,11 @@ class ClientTests(unittest.TestCase):
         self.assertEqual(summary["discovered_tools"], ["host_health", "hosts_list"])
         self.assertEqual(summary["calls"][0]["name"], "hosts_list")
         self.assertEqual(summary["errors"], [])
+        self.assertEqual(summary["output_text"], "healthy")
+        self.assertEqual(
+            client.called_host_health_targets(summary),
+            {"PROFESYS-SCIENTIAM"},
+        )
 
 
 if __name__ == "__main__":
