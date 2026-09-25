@@ -5,6 +5,7 @@ on:
   pull_request:
     paths:
       - "gateway/**"
+      - "clients/**"
       - "docs/**"
       - "deploy/**"
       - "registry/**"
@@ -41,3 +42,24 @@ jobs:
         shell: bash
         run: |
           bash -n ../deploy/remote-ops/*.sh
+
+  client-static:
+    name: OpenAI SROF client static
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unit tests
+        working-directory: clients/openai-responses
+        run: python3 -m unittest discover -s tests -v
+      - name: Compile
+        working-directory: clients/openai-responses
+        run: python3 -m py_compile srof_openai_client.py
+      - name: Validate Keycloak client bootstrap syntax
+        shell: bash
+        run: bash -n deploy/native-auth/configure-openai-responses-client.sh
+      - name: Verify no remote transport
+        shell: bash
+        run: |
+          ! grep -R -E 'ssh |scp |rsync |desktop.commander|GitHub Actions transport' clients/openai-responses/*.py
+          echo "STATIC_ONLY_NO_REMOTE_TRANSPORT=PASS"
