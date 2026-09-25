@@ -57,11 +57,6 @@ def require_env(name: str) -> str:
     return value
 
 
-def normalize_bearer(value: str) -> str:
-    value = value.strip()
-    return value if value.lower().startswith("bearer ") else f"Bearer {value}"
-
-
 def _get_json(url: str, timeout: int = 20) -> dict[str, Any]:
     request = urllib.request.Request(url, headers={"Accept": "application/json"})
     with urllib.request.urlopen(request, timeout=timeout) as response:
@@ -232,7 +227,7 @@ def build_request(
                     "Use only for authorized PROFESYS/SCIENTIAM host inspection."
                 ),
                 "server_url": srof_url,
-                "authorization": normalize_bearer(srof_access_token),
+                "authorization": srof_access_token.strip(),
                 "allowed_tools": tools,
                 "require_approval": "never",
             }
