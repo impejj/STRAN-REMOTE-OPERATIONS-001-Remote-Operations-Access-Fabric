@@ -178,6 +178,32 @@ echo "SROF_PORTABLE_READ_HOST_SMOKE=PASS"
 """
         return ssh(["bash", "-lc", script], 300)
 
+    if op == "portable_dev_smoke":
+        # Fixed bounded DEV proof: no user-controlled shell/path arguments.
+        # The human checkout is never mutated; execution uses a disposable clone.
+        script = f"""
+set -euo pipefail
+SRC={shlex.quote(SCIENTIAM_REPO)}
+TMP="$(mktemp -d /tmp/srof-portable-dev.XXXXXX)"
+cleanup() {{
+  docker compose -f "$TMP/repo/services/srof-portable-worker/docker-compose.dev.yml" down -v --remove-orphans >/dev/null 2>&1 || true
+  rm -rf "$TMP"
+}}
+trap cleanup EXIT
+
+git -C "$SRC" fetch origin main
+git clone --local "$SRC" "$TMP/repo" >/dev/null 2>&1
+git -C "$TMP/repo" checkout --detach origin/main >/dev/null 2>&1
+
+cd "$TMP/repo/services/srof-portable-worker"
+export SROF_WORKER_TOKEN="srof-relay-dev-smoke-token"
+bash ./scripts/smoke-dev.sh
+
+test -s "$PWD/.dev-smoke-receipts/portable-dev-smoke-001.json"
+echo "SROF_PORTABLE_DEV_HOST_SMOKE=PASS"
+"""
+        return ssh(["bash", "-lc", script], 360)
+
     raise ValueError(f"OPERATION_DENIED:{op}")
 
 
@@ -239,7 +265,7 @@ class Handler(BaseHTTPRequestHandler):
                 "service": "srof-relay-poc",
                 "worker": "docker",
                 "target": "THINKPAD-E470",
-                "operations": ["host_health", "git_status", "fase0_probe", "portable_read_smoke"],
+                "operations": ["host_health", "git_status", "fase0_probe", "portable_read_smoke", "portable_dev_smoke"],
             })
             return
 
