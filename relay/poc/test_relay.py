@@ -268,5 +268,39 @@ class SPMLegacyExportChunkTests(unittest.TestCase):
         mocked.assert_not_called()
 
 
+class ClaraIntakeLocalProbeTests(unittest.TestCase):
+    def test_server_probe_uses_fixed_read_only_source(self):
+        req = {
+            "schema": "srof.relay.request.v1",
+            "request_id": "clara-intake-probe-test",
+            "host_id": "PROFESYS-SCIENTIAM",
+            "operation": "clara_intake_local_probe",
+            "args": {"path": "/tmp/evil", "command": "rm -rf /"},
+        }
+        with patch.object(relay, "FOUNDER_COMPANION_SOURCE", "/tmp/founder-companion"), \
+             patch("os.path.isfile") as isfile, \
+             patch("os.path.isdir") as isdir, \
+             patch("os.listdir", return_value=[]):
+            isfile.return_value = False
+            isdir.return_value = True
+            result = relay.execute(req)
+        self.assertEqual(result["exit_code"], 0)
+        payload = __import__("json").loads(result["stdout"])
+        self.assertEqual(payload["root"], "/tmp/founder-companion")
+        self.assertNotIn("/tmp/evil", result["stdout"])
+        self.assertNotIn("rm -rf /", result["stdout"])
+
+    def test_probe_not_exposed_for_thinkpad(self):
+        req = {
+            "schema": "srof.relay.request.v1",
+            "request_id": "clara-intake-probe-bad-host",
+            "host_id": "THINKPAD-E470",
+            "operation": "clara_intake_local_probe",
+            "args": {},
+        }
+        with self.assertRaisesRegex(ValueError, "OPERATION_DENIED"):
+            relay.execute(req)
+
+
 if __name__ == "__main__":
     unittest.main()
