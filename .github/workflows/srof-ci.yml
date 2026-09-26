@@ -9,6 +9,7 @@ on:
       - "docs/**"
       - "deploy/**"
       - "registry/**"
+      - "relay/**"
       - "tests/**"
       - ".github/workflows/srof-ci.yml"
   workflow_dispatch:
@@ -42,6 +43,17 @@ jobs:
         shell: bash
         run: |
           bash -n ../deploy/remote-ops/*.sh
+
+  relay-static:
+    name: Relay static policy tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Relay unit tests
+        run: python3 -m unittest discover -s relay/poc -p 'test_*.py' -v
+      - name: Compile Relay
+        run: python3 -m py_compile relay/poc/relay.py
 
   client-static:
     name: OpenAI SROF client static
