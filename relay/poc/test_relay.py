@@ -52,7 +52,7 @@ class PortableReadSmokeTests(unittest.TestCase):
         req = self.request()
         req["host_id"] = "PROFESYS-SCIENTIAM"
         with patch.object(relay, "stage_worker_source") as staged:
-            with self.assertRaisesRegex(ValueError, "POC_HOST_DENIED"):
+            with self.assertRaisesRegex(ValueError, "SERVER_OPERATION_DENIED"):
                 relay.execute(req)
         staged.assert_not_called()
 
