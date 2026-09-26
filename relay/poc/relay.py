@@ -247,6 +247,29 @@ echo "SROF_FASE0_PROBE=PASS"
 """
         return ssh(["bash", "-lc", script], 180)
 
+    if op == "spm_legacy_export_probe":
+        # Read-only, fixed-scope probe for the three historical SPM CSV exports.
+        # User arguments are ignored; no mutation, upload, delete or database access.
+        script = r"""
+set +e
+ROOT=/home/impejj/Descargas
+echo "HOST=$(hostname -s)"
+echo "USER=$(id -un)"
+echo "ROOT=$ROOT"
+for name in portfolios.csv programs.csv projects.csv; do
+  echo "=== $name ==="
+  find "$ROOT" -maxdepth 5 -type f -name "$name" -print 2>/dev/null | while IFS= read -r p; do
+    rows="$(awk 'END{print NR-1}' "$p" 2>/dev/null)"
+    bytes="$(stat -c %s "$p" 2>/dev/null)"
+    sha="$(sha256sum "$p" 2>/dev/null | awk '{print $1}')"
+    printf 'PATH=%s\nROWS=%s\nBYTES=%s\nSHA256=%s\n' "$p" "$rows" "$bytes" "$sha"
+    head -n 1 "$p" 2>/dev/null | sed 's/^/HEADER=/'
+    echo "---"
+  done
+done
+"""
+        return ssh(["bash", "-lc", script], 45)
+
     if op == "container_runtime_probe":
         # Read-only capability probe. Never changes groups, sockets, contexts or daemons.
         script = r"""
@@ -391,7 +414,7 @@ class Handler(BaseHTTPRequestHandler):
                 "service": "srof-relay-poc",
                 "worker": "docker",
                 "target": "THINKPAD-E470",
-                "operations": ["host_health", "git_status", "fase0_probe", "container_runtime_probe", "portable_read_smoke", "portable_dev_smoke", "server_read_worker_health", "server_read_worker_capabilities", "server_read_worker_job"],
+                "operations": ["host_health", "git_status", "fase0_probe", "spm_legacy_export_probe", "container_runtime_probe", "portable_read_smoke", "portable_dev_smoke", "server_read_worker_health", "server_read_worker_capabilities", "server_read_worker_job"],
             })
             return
 

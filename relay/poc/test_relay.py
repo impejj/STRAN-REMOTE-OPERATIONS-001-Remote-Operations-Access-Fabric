@@ -193,5 +193,32 @@ class ServerReadWorkerTests(unittest.TestCase):
             relay.execute(req)
 
 
+class SPMLegacyExportProbeTests(unittest.TestCase):
+    def test_probe_is_fixed_read_only_and_ignores_user_args(self):
+        req = {
+            "schema": "srof.relay.request.v1",
+            "request_id": "spm-legacy-probe-test",
+            "host_id": "THINKPAD-E470",
+            "operation": "spm_legacy_export_probe",
+            "args": {"path": "/tmp/evil", "command": "rm -rf /"},
+        }
+        with patch.object(relay, "ssh", return_value={"exit_code": 0, "stdout": "PASS", "stderr": ""}) as mocked:
+            result = relay.execute(req)
+        self.assertEqual(result["exit_code"], 0)
+        argv, timeout = mocked.call_args.args
+        self.assertEqual(argv[:2], ["bash", "-lc"])
+        self.assertEqual(timeout, 45)
+        script = argv[2]
+        self.assertIn("/home/impejj/Descargas", script)
+        self.assertIn("portfolios.csv", script)
+        self.assertIn("programs.csv", script)
+        self.assertIn("projects.csv", script)
+        self.assertIn("sha256sum", script)
+        self.assertIn("head -n 1", script)
+        self.assertNotIn("/tmp/evil", script)
+        self.assertNotIn("rm -rf /", script)
+        self.assertNotIn("mysql", script)
+
+
 if __name__ == "__main__":
     unittest.main()
