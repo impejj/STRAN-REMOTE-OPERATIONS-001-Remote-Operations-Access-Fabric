@@ -220,5 +220,53 @@ class SPMLegacyExportProbeTests(unittest.TestCase):
         self.assertNotIn("mysql", script)
 
 
+class SPMLegacyExportChunkTests(unittest.TestCase):
+    def test_chunk_reader_uses_fixed_dataset_paths_and_bounded_args(self):
+        req = {
+            "schema": "srof.relay.request.v1",
+            "request_id": "spm-legacy-chunk-test",
+            "host_id": "THINKPAD-E470",
+            "operation": "spm_legacy_export_chunk",
+            "args": {"dataset": "projects", "offset": 15000, "length": 12000},
+        }
+        with patch.object(relay, "ssh", return_value={"exit_code": 0, "stdout": "{}", "stderr": ""}) as mocked:
+            result = relay.execute(req)
+        self.assertEqual(result["exit_code"], 0)
+        argv, timeout = mocked.call_args.args
+        self.assertEqual(argv[:2], ["python3", "-c"])
+        self.assertEqual(timeout, 30)
+        script = argv[2]
+        self.assertIn("/home/impejj/Descargas/projects.csv", script)
+        self.assertIn("off=15000", script)
+        self.assertIn("n=12000", script)
+        self.assertIn("base64.b64encode", script)
+
+    def test_chunk_reader_rejects_unknown_dataset(self):
+        req = {
+            "schema": "srof.relay.request.v1",
+            "request_id": "spm-legacy-chunk-bad",
+            "host_id": "THINKPAD-E470",
+            "operation": "spm_legacy_export_chunk",
+            "args": {"dataset": "../../etc/passwd", "offset": 0, "length": 10},
+        }
+        with patch.object(relay, "ssh") as mocked:
+            with self.assertRaisesRegex(ValueError, "SPM_LEGACY_DATASET_DENIED"):
+                relay.execute(req)
+        mocked.assert_not_called()
+
+    def test_chunk_reader_bounds_length(self):
+        req = {
+            "schema": "srof.relay.request.v1",
+            "request_id": "spm-legacy-chunk-too-large",
+            "host_id": "THINKPAD-E470",
+            "operation": "spm_legacy_export_chunk",
+            "args": {"dataset": "projects", "offset": 0, "length": 15001},
+        }
+        with patch.object(relay, "ssh") as mocked:
+            with self.assertRaisesRegex(ValueError, "SPM_LEGACY_LENGTH_DENIED"):
+                relay.execute(req)
+        mocked.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

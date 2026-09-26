@@ -247,6 +247,35 @@ echo "SROF_FASE0_PROBE=PASS"
 """
         return ssh(["bash", "-lc", script], 180)
 
+    if op == "spm_legacy_export_chunk":
+        dataset = str(args.get("dataset", ""))
+        offset = args.get("offset", 0)
+        length = args.get("length", 15000)
+        paths = {
+            "portfolios": "/home/impejj/Descargas/portfolios.csv",
+            "programs": "/home/impejj/Descargas/programs.csv",
+            "projects": "/home/impejj/Descargas/projects.csv",
+        }
+        if dataset not in paths:
+            raise ValueError("SPM_LEGACY_DATASET_DENIED")
+        if not isinstance(offset, int) or offset < 0 or offset > 2_000_000:
+            raise ValueError("SPM_LEGACY_OFFSET_DENIED")
+        if not isinstance(length, int) or length < 1 or length > 15000:
+            raise ValueError("SPM_LEGACY_LENGTH_DENIED")
+        path = paths[dataset]
+        py = (
+            "import base64,hashlib,json;"
+            f"p={path!r};off={offset};n={length};"
+            "raw=open(p,'rb').read();"
+            "chunk=raw[off:off+n];"
+            "print(json.dumps({'dataset':"
+            + repr(dataset)
+            + ",'offset':off,'length':len(chunk),'total_bytes':len(raw),"
+              "'sha256':hashlib.sha256(raw).hexdigest(),"
+              "'base64':base64.b64encode(chunk).decode('ascii')}))"
+        )
+        return ssh(["python3", "-c", py], 30)
+
     if op == "spm_legacy_export_probe":
         # Read-only, fixed-scope probe for the three historical SPM CSV exports.
         # User arguments are ignored; no mutation, upload, delete or database access.
@@ -414,7 +443,7 @@ class Handler(BaseHTTPRequestHandler):
                 "service": "srof-relay-poc",
                 "worker": "docker",
                 "target": "THINKPAD-E470",
-                "operations": ["host_health", "git_status", "fase0_probe", "spm_legacy_export_probe", "container_runtime_probe", "portable_read_smoke", "portable_dev_smoke", "server_read_worker_health", "server_read_worker_capabilities", "server_read_worker_job"],
+                "operations": ["host_health", "git_status", "fase0_probe", "spm_legacy_export_probe", "spm_legacy_export_chunk", "container_runtime_probe", "portable_read_smoke", "portable_dev_smoke", "server_read_worker_health", "server_read_worker_capabilities", "server_read_worker_job"],
             })
             return
 
