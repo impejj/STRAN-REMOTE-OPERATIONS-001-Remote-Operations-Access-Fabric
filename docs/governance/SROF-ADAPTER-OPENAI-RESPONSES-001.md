@@ -16,11 +16,15 @@ SCIENTIAM UI / CLI / AIPS
   -> managed hosts
 ```
 
-This is an adapter, not a new control plane. SROF remains the single authority for host policy, tools and receipts.
+This is an optional adapter, not a new control plane. SROF remains the single authority for host policy, tools and receipts, and continues operating if OpenAI API access is unavailable.
 
 ## Current OpenAI contract
 
-The Responses API supports remote MCP tools by `server_url`. Authenticated MCP servers receive an OAuth bearer through the MCP tool's `authorization` field. Tool discovery can be narrowed with `allowed_tools`, and approval behavior can be controlled with `require_approval`.
+The Responses API supports remote MCP tools by `server_url`. For private/on-premises MCP servers, OpenAI Secure MCP Tunnel provides a separate path using `tunnel_id` without requiring an inbound public listener.
+
+Authenticated MCP servers may receive an OAuth bearer through the MCP tool's `authorization` field. Tool discovery can be narrowed with `allowed_tools`, and approval behavior can be controlled with `require_approval`.
+
+This API integration is independent of a ChatGPT Plus subscription and requires its own OpenAI API credentials/billing and any required tunnel permissions.
 
 ## P0 policy
 
