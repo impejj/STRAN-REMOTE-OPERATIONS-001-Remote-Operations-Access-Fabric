@@ -1,3 +1,23 @@
+# Repository role in SCIENTIAM domain architecture — 2026-09-26
+
+**Canonical capability:** SROF — governed remote/runtime operations fabric.
+
+```text
+WEF eligible work
+→ PENTA activation
+→ runtime admission / capacity match
+→ SEF capability
+→ SROF transport / host execution
+→ Worker
+→ Receipt / Evidence
+```
+
+SROF **does not create backlog, Work Requests or Work Items**. It does not decide project intent or planning. It executes already-authorized runtime operations through bounded transports and returns durable evidence.
+
+This repository currently fulfills the responsibility that a future repo name such as `scientiam-srof` would represent. **Do not create a duplicate SROF repository without an explicit rename/migration decision.**
+
+---
+
 # STRAN-REMOTE-OPERATIONS-001 — Remote Operations & Access Fabric
 
 **Status:** ACTIVE · P0  
