@@ -28,6 +28,7 @@ KNOWN_HOSTS = os.environ.get("SROF_KNOWN_HOSTS", "/run/secrets/known_hosts")
 
 ALLOWED_REPO_ROOT = "/home/impejj/work/profesys"
 SCIENTIAM_REPO = "/home/impejj/work/profesys/scientiam"
+WORKER_SOURCE = os.environ.get("SROF_WORKER_SOURCE", "/source/srof-portable-worker")
 PATH_RE = re.compile(r"^/[A-Za-z0-9_./@+-]{1,500}$")
 SCHEMA = "srof.relay.request.v1"
 
@@ -102,6 +103,45 @@ def ssh(argv: list[str], timeout: int = 30) -> dict:
     }
 
 
+def scp_tree(local_path: str, remote_parent: str, timeout: int = 120) -> dict:
+    if os.path.realpath(local_path) != os.path.realpath(WORKER_SOURCE):
+        raise ValueError("WORKER_SOURCE_DENIED")
+    if not os.path.isdir(local_path):
+        raise FileNotFoundError("WORKER_SOURCE_UNAVAILABLE")
+    cmd = [
+        "scp",
+        "-r",
+        "-i", SSH_KEY,
+        "-o", "BatchMode=yes",
+        "-o", "PasswordAuthentication=no",
+        "-o", "ConnectTimeout=5",
+        "-o", "StrictHostKeyChecking=yes",
+        "-o", f"UserKnownHostsFile={KNOWN_HOSTS}",
+        local_path,
+        f"{THINKPAD_USER}@{THINKPAD_HOST}:{remote_parent}/",
+    ]
+    p = subprocess.run(cmd, text=True, capture_output=True, timeout=timeout, check=False)
+    return {
+        "exit_code": p.returncode,
+        "stdout": p.stdout[-8000:],
+        "stderr": p.stderr[-8000:],
+    }
+
+
+def stage_worker_source(kind: str) -> str:
+    if kind not in {"read", "dev"}:
+        raise ValueError("WORKER_STAGE_KIND_DENIED")
+    remote_root = f"/tmp/srof-portable-{kind}-{uuid.uuid4().hex}"
+    created = ssh(["mkdir", "-m", "700", "-p", remote_root], 20)
+    if created["exit_code"] != 0:
+        raise RuntimeError(f"WORKER_STAGE_MKDIR_FAILED:{created['stderr'][-1000:]}")
+    copied = scp_tree(WORKER_SOURCE, remote_root, 120)
+    if copied["exit_code"] != 0:
+        ssh(["rm", "-rf", remote_root], 20)
+        raise RuntimeError(f"WORKER_STAGE_COPY_FAILED:{copied['stderr'][-1000:]}")
+    return remote_root
+
+
 def execute(req: dict) -> dict:
     if req.get("schema") != SCHEMA:
         raise ValueError("INVALID_SCHEMA")
@@ -151,23 +191,21 @@ echo "SROF_FASE0_PROBE=PASS"
         return ssh(["bash", "-lc", script], 180)
 
     if op == "portable_read_smoke":
-        # Fixed bounded operation: no user-controlled shell or path arguments.
-        # The human checkout is never mutated. Execution uses a disposable clone.
+        # Source is staged from the SERVER-owned canonical snapshot.
+        # No GitHub fetch and no human checkout mutation occur on THINKPAD.
+        remote_root = stage_worker_source("read")
+        worker_dir = remote_root + "/srof-portable-worker"
         script = f"""
 set -euo pipefail
-SRC={shlex.quote(SCIENTIAM_REPO)}
-TMP="$(mktemp -d /tmp/srof-portable-read.XXXXXX)"
+ROOT={shlex.quote(remote_root)}
+WORKER={shlex.quote(worker_dir)}
 cleanup() {{
-  docker compose -f "$TMP/repo/services/srof-portable-worker/docker-compose.yml" down -v --remove-orphans >/dev/null 2>&1 || true
-  rm -rf "$TMP"
+  docker compose -f "$WORKER/docker-compose.yml" down -v --remove-orphans >/dev/null 2>&1 || true
+  rm -rf "$ROOT"
 }}
 trap cleanup EXIT
 
-git -C "$SRC" fetch origin main
-git clone --local "$SRC" "$TMP/repo" >/dev/null 2>&1
-git -C "$TMP/repo" checkout --detach origin/main >/dev/null 2>&1
-
-cd "$TMP/repo/services/srof-portable-worker"
+cd "$WORKER"
 export SROF_WORKER_TOKEN="srof-relay-smoke-token"
 export SROF_READ_ROOT="$PWD/fixture"
 export SROF_RECEIPT_DIR="$PWD/.smoke-receipts"
@@ -179,23 +217,21 @@ echo "SROF_PORTABLE_READ_HOST_SMOKE=PASS"
         return ssh(["bash", "-lc", script], 300)
 
     if op == "portable_dev_smoke":
-        # Fixed bounded DEV proof: no user-controlled shell/path arguments.
-        # The human checkout is never mutated; execution uses a disposable clone.
+        # DEV uses the same staged source snapshot and keeps its own disposable
+        # source/workspace lifecycle inside the remote temporary directory.
+        remote_root = stage_worker_source("dev")
+        worker_dir = remote_root + "/srof-portable-worker"
         script = f"""
 set -euo pipefail
-SRC={shlex.quote(SCIENTIAM_REPO)}
-TMP="$(mktemp -d /tmp/srof-portable-dev.XXXXXX)"
+ROOT={shlex.quote(remote_root)}
+WORKER={shlex.quote(worker_dir)}
 cleanup() {{
-  docker compose -f "$TMP/repo/services/srof-portable-worker/docker-compose.dev.yml" down -v --remove-orphans >/dev/null 2>&1 || true
-  rm -rf "$TMP"
+  docker compose -f "$WORKER/docker-compose.dev.yml" down -v --remove-orphans >/dev/null 2>&1 || true
+  rm -rf "$ROOT"
 }}
 trap cleanup EXIT
 
-git -C "$SRC" fetch origin main
-git clone --local "$SRC" "$TMP/repo" >/dev/null 2>&1
-git -C "$TMP/repo" checkout --detach origin/main >/dev/null 2>&1
-
-cd "$TMP/repo/services/srof-portable-worker"
+cd "$WORKER"
 export SROF_WORKER_TOKEN="srof-relay-dev-smoke-token"
 bash ./scripts/smoke-dev.sh
 
