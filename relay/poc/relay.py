@@ -34,6 +34,9 @@ WORKER_SOURCE = os.environ.get("SROF_WORKER_SOURCE", "/source/srof-portable-work
 SERVER_READ_WORKER_URL = os.environ.get("SROF_SERVER_READ_WORKER_URL", "http://srof-worker-read-server:8781").rstrip("/")
 SERVER_READ_WORKER_TOKEN_FILE = os.environ.get("SROF_SERVER_READ_WORKER_TOKEN_FILE", "/run/secrets/server_read_worker_token")
 SERVER_READ_OPERATIONS = ("fs_list", "fs_read", "fs_find", "git_status", "git_diff")
+SERVER_DEV_WORKER_URL = os.environ.get("SROF_SERVER_DEV_WORKER_URL", "http://srof-worker-dev-server:8782").rstrip("/")
+SERVER_DEV_WORKER_TOKEN_FILE = os.environ.get("SROF_SERVER_DEV_WORKER_TOKEN_FILE", "/run/secrets/server_dev_worker_token")
+SERVER_DEV_TEST_PROFILES = ("srof-relay-tests",)
 PATH_RE = re.compile(r"^/[A-Za-z0-9_./@+-]{1,500}$")
 SCHEMA = "srof.relay.request.v1"
 
@@ -176,6 +179,35 @@ def server_read_worker_request(method: str, endpoint: str, payload: dict | None 
         return {"exit_code": 73, "stdout": "", "stderr": f"WORKER_HTTP_FAILED:{type(exc).__name__}"}
 
 
+def server_dev_worker_request(method: str, endpoint: str, payload: dict | None = None) -> dict:
+    if method not in {"GET", "POST"}:
+        raise ValueError("DEV_WORKER_HTTP_METHOD_DENIED")
+    if endpoint not in {"/health", "/capabilities", "/jobs"}:
+        raise ValueError("DEV_WORKER_HTTP_ENDPOINT_DENIED")
+    headers = {"Accept": "application/json"}
+    data = None
+    if method == "POST":
+        if endpoint != "/jobs":
+            raise ValueError("DEV_WORKER_HTTP_POST_DENIED")
+        with open(SERVER_DEV_WORKER_TOKEN_FILE, encoding="utf-8") as handle:
+            token = handle.read().strip()
+        if not token:
+            raise RuntimeError("SERVER_DEV_WORKER_TOKEN_EMPTY")
+        headers["Authorization"] = "Bearer " + token
+        headers["Content-Type"] = "application/json"
+        data = json.dumps(payload or {}, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    req = Request(SERVER_DEV_WORKER_URL + endpoint, data=data, headers=headers, method=method)
+    try:
+        with urlopen(req, timeout=210) as response:
+            body = response.read(1048576).decode("utf-8", "replace")
+            return {"exit_code": 0, "stdout": body, "stderr": ""}
+    except HTTPError as exc:
+        body = exc.read(1048576).decode("utf-8", "replace")
+        return {"exit_code": 72, "stdout": body, "stderr": f"DEV_WORKER_HTTP_{exc.code}"}
+    except Exception as exc:
+        return {"exit_code": 73, "stdout": "", "stderr": f"DEV_WORKER_HTTP_FAILED:{type(exc).__name__}"}
+
+
 def execute(req: dict) -> dict:
     if req.get("schema") != SCHEMA:
         raise ValueError("INVALID_SCHEMA")
@@ -204,6 +236,31 @@ def execute(req: dict) -> dict:
                 "args": job_args,
             }
             return server_read_worker_request("POST", "/jobs", payload)
+        if op == "server_dev_worker_health":
+            return server_dev_worker_request("GET", "/health")
+        if op == "server_dev_worker_capabilities":
+            return server_dev_worker_request("GET", "/capabilities")
+        if op == "server_dev_worker_job":
+            patch = args.get("patch")
+            if not isinstance(patch, str) or not patch:
+                raise ValueError("SERVER_DEV_PATCH_REQUIRED")
+            profile = str(args.get("test_profile", "srof-relay-tests"))
+            if profile not in SERVER_DEV_TEST_PROFILES:
+                raise ValueError("SERVER_DEV_TEST_PROFILE_DENIED")
+            base_ref = str(args.get("base_ref", "HEAD"))
+            payload = {
+                "schema": "srof.dev.job.v1",
+                "request_id": "SROF-SERVER-DEV-" + uuid.uuid4().hex[:20],
+                "operation": "candidate_patch",
+                "args": {
+                    "source_repo_path": ".",
+                    "base_ref": base_ref,
+                    "patch": patch,
+                    "test_profile": profile,
+                    "retain_workspace": False,
+                },
+            }
+            return server_dev_worker_request("POST", "/jobs", payload)
         raise ValueError("SERVER_OPERATION_DENIED")
 
     if host_id != "THINKPAD-E470":
@@ -391,7 +448,7 @@ class Handler(BaseHTTPRequestHandler):
                 "service": "srof-relay-poc",
                 "worker": "docker",
                 "target": "THINKPAD-E470",
-                "operations": ["host_health", "git_status", "fase0_probe", "container_runtime_probe", "portable_read_smoke", "portable_dev_smoke", "server_read_worker_health", "server_read_worker_capabilities", "server_read_worker_job"],
+                "operations": ["host_health", "git_status", "fase0_probe", "container_runtime_probe", "portable_read_smoke", "portable_dev_smoke", "server_read_worker_health", "server_read_worker_capabilities", "server_read_worker_job", "server_dev_worker_health", "server_dev_worker_capabilities", "server_dev_worker_job"],
             })
             return
 

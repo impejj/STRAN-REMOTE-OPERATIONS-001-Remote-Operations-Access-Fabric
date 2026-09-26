@@ -193,5 +193,72 @@ class ServerReadWorkerTests(unittest.TestCase):
             relay.execute(req)
 
 
+class ServerDevWorkerTests(unittest.TestCase):
+    def test_server_dev_health_routes_to_persistent_worker(self):
+        req = {
+            "schema": "srof.relay.request.v1",
+            "request_id": "server-dev-health-test",
+            "host_id": "PROFESYS-SCIENTIAM",
+            "operation": "server_dev_worker_health",
+            "args": {},
+        }
+        expected = {"exit_code": 0, "stdout": '{"status":"HEALTHY"}', "stderr": ""}
+        with patch.object(relay, "server_dev_worker_request", return_value=expected) as mocked:
+            result = relay.execute(req)
+        self.assertEqual(result, expected)
+        mocked.assert_called_once_with("GET", "/health")
+
+    def test_server_dev_job_is_forced_to_candidate_patch_and_cleanup(self):
+        req = {
+            "schema": "srof.relay.request.v1",
+            "request_id": "server-dev-job-test",
+            "host_id": "PROFESYS-SCIENTIAM",
+            "operation": "server_dev_worker_job",
+            "args": {
+                "patch": "diff --git a/x b/x\n",
+                "base_ref": "HEAD",
+                "test_profile": "srof-relay-tests",
+                "retain_workspace": True,
+                "source_repo_path": "/tmp/evil",
+            },
+        }
+        expected = {"exit_code": 0, "stdout": '{"state":"VERIFIED"}', "stderr": ""}
+        with patch.object(relay, "server_dev_worker_request", return_value=expected) as mocked:
+            result = relay.execute(req)
+        self.assertEqual(result, expected)
+        method, endpoint, payload = mocked.call_args.args
+        self.assertEqual((method, endpoint), ("POST", "/jobs"))
+        self.assertEqual(payload["schema"], "srof.dev.job.v1")
+        self.assertEqual(payload["operation"], "candidate_patch")
+        self.assertEqual(payload["args"]["source_repo_path"], ".")
+        self.assertEqual(payload["args"]["retain_workspace"], False)
+        self.assertEqual(payload["args"]["test_profile"], "srof-relay-tests")
+        self.assertNotIn("/tmp/evil", str(payload))
+
+    def test_server_dev_job_rejects_unknown_test_profile(self):
+        req = {
+            "schema": "srof.relay.request.v1",
+            "request_id": "server-dev-profile-deny",
+            "host_id": "PROFESYS-SCIENTIAM",
+            "operation": "server_dev_worker_job",
+            "args": {"patch": "diff --git a/x b/x\n", "test_profile": "arbitrary-shell"},
+        }
+        with patch.object(relay, "server_dev_worker_request") as mocked:
+            with self.assertRaisesRegex(ValueError, "SERVER_DEV_TEST_PROFILE_DENIED"):
+                relay.execute(req)
+        mocked.assert_not_called()
+
+    def test_server_dev_job_requires_patch(self):
+        req = {
+            "schema": "srof.relay.request.v1",
+            "request_id": "server-dev-no-patch",
+            "host_id": "PROFESYS-SCIENTIAM",
+            "operation": "server_dev_worker_job",
+            "args": {},
+        }
+        with self.assertRaisesRegex(ValueError, "SERVER_DEV_PATCH_REQUIRED"):
+            relay.execute(req)
+
+
 if __name__ == "__main__":
     unittest.main()
