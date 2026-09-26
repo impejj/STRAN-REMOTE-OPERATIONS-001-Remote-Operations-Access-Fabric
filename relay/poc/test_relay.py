@@ -110,5 +110,29 @@ class SourceStagingTests(unittest.TestCase):
             relay.stage_worker_source("root")
 
 
+class ContainerRuntimeProbeTests(unittest.TestCase):
+    def test_probe_is_read_only_and_fixed(self):
+        req = {
+            "schema": "srof.relay.request.v1",
+            "request_id": "runtime-probe-test",
+            "host_id": "THINKPAD-E470",
+            "operation": "container_runtime_probe",
+            "args": {"command": "usermod -aG docker scientiam-remoteops"},
+        }
+        with patch.object(relay, "ssh", return_value={"exit_code": 0, "stdout": "PASS", "stderr": ""}) as mocked:
+            result = relay.execute(req)
+        self.assertEqual(result["exit_code"], 0)
+        argv, timeout = mocked.call_args.args
+        self.assertEqual(argv[:2], ["bash", "-lc"])
+        self.assertEqual(timeout, 30)
+        script = argv[2]
+        self.assertIn("/var/run/docker.sock", script)
+        self.assertIn("/run/user/$uid/docker.sock", script)
+        self.assertIn("podman info", script)
+        self.assertNotIn("usermod", script)
+        self.assertNotIn("chmod", script)
+        self.assertNotIn("chown", script)
+
+
 if __name__ == "__main__":
     unittest.main()
