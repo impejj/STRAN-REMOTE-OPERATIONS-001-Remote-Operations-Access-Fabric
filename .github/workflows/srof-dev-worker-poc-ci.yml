@@ -1,0 +1,45 @@
+name: SROF Isolated DEV Worker POC CI
+
+on:
+  pull_request:
+    paths:
+      - "workers/dev-poc/**"
+      - ".github/workflows/srof-dev-worker-poc-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  worker-boundaries:
+    runs-on: self-hosted
+    timeout-minutes: 10
+
+    steps:
+      - name: Verify authorized runner host
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(hostname -s)" = "profesys-scientiam"
+          docker version --format 'DOCKER={{.Server.Version}}'
+
+      - name: Checkout candidate
+        uses: actions/checkout@v4
+
+      - name: Build rootless worker image
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build -t srof-worker-dev-poc:ci workers/dev-poc
+
+      - name: Run worker boundary tests inside image
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --read-only \
+            --tmpfs /tmp:rw,noexec,nosuid,size=256m \
+            --cap-drop=ALL \
+            --security-opt=no-new-privileges \
+            --entrypoint python3 \
+            srof-worker-dev-poc:ci \
+            -m pytest -q /worker/test_runner.py
