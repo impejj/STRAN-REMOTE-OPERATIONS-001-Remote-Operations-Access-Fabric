@@ -7,7 +7,7 @@ Human Browser
    |
    +--> MeshCentral -------------------------------+
                                                    |
-AI clients -> MCP/HTTPS -> SROF Gateway -> Policy + Host Registry
+AI clients / automations -> adapter/MCP/API -> SROF Gateway -> Policy + Host Registry
                                                    |
                                                    +--> OpenSSH
                                                    |     +--> ThinkPad
@@ -22,13 +22,19 @@ AI clients -> MCP/HTTPS -> SROF Gateway -> Policy + Host Registry
                                                    +--> Slot Control Plane
 ```
 
+## Dependency rule
+
+SROF is client-neutral and vendor-neutral. ChatGPT, OpenAI API, Claude, local agents, CLIs and future clients are adapters/consumers. None is required for core Remote Operations.
+
+Critical host access, policy evaluation and evidence generation must remain available if any single external AI/control provider is unavailable.
+
 ## Separation of concerns
 
 ### MeshCentral
 Human emergency/interactive operations. It is not the AI control plane.
 
 ### SROF Gateway
-Small, inspectable MCP service. It never owns host credentials in source control and never accepts arbitrary shell text from database queues.
+Small, inspectable MCP service. It never owns host credentials in source control and never accepts arbitrary shell text from database queues. It exposes a stable contract to multiple authorized clients rather than binding the fabric to one AI product.
 
 ### OpenSSH
 Transport and identity substrate. Keys and certificates remain outside Git.
@@ -84,4 +90,6 @@ Every operation returns:
 
 ## Networking
 
-P0 should work over LAN first. WAN exposure is a separate hardening step and must use an authenticated tunnel/reverse proxy with MFA; never expose raw SSH or MeshCentral broadly without CISO review.
+P0 must work independently on the managed network first. WAN access is a separate hardened transport concern and must never turn a third-party control product into a critical dependency.
+
+Authorized adapter options may include the existing public HTTPS SROF endpoint or a private MCP connection through a secure outbound tunnel. Raw SSH or MeshCentral must never be broadly exposed without security review.
