@@ -53,9 +53,13 @@ def test_read_job_is_structured_and_secret_never_enters_argv():
         "args": {"path": "README.md"},
     }
     joined = " ".join(argv)
-    assert "Bearer " not in joined
+    # The helper may contain the HTTP scheme literal "Bearer ", but no secret
+    # value is ever serialized into argv. The target host reads it at runtime
+    # from the protected token file.
     assert "replace-with-runtime-secret" not in joined
+    assert "ci-ephemeral-token" not in joined
     assert "/etc/scientiam/srof-workers/read.token" in joined
+    assert "open(token_file" in joined
 
 
 def test_read_job_rejects_mutation_and_dev_execution():
