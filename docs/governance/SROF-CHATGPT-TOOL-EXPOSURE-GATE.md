@@ -1,6 +1,6 @@
 # SROF-CHATGPT-TOOL-EXPOSURE-GATE
 
-**State:** BACKEND_READY / RUNTIME_BINDING_REQUIRED
+**State:** OPTIONAL_ADAPTER / BACKEND_READY / RUNTIME_BINDING_PLAN_DEPENDENT
 
 ## What is already closed
 
@@ -17,7 +17,13 @@
 - DCP: not used
 - GitHub Actions transport: not used
 
-## Remaining gate per ChatGPT runtime/workspace
+## Product boundary — verified 2026-09-26
+
+ChatGPT tool exposure is optional and plan-dependent. Current OpenAI documentation places full custom MCP support, including write/modify actions, on Business and Enterprise/Edu. Pro has a narrower read/fetch developer-mode path. ChatGPT Plus must therefore not be treated as a required SROF execution client.
+
+SROF remains operational even when this entire adapter is unavailable.
+
+## Remaining gate per compatible ChatGPT runtime/workspace
 
 A ChatGPT runtime is LIVE for SROF only after:
 
@@ -53,4 +59,6 @@ Do not:
 
 `BACKEND_READY` does not mean every ChatGPT chat can automatically invoke SROF.
 
-Tool availability is a product/runtime binding property and must be verified in each environment.
+Tool availability is a product/runtime/plan binding property and must be verified in each environment.
+
+Failure of this gate means only **ChatGPT adapter unavailable**. It does not mean SROF, SSH, MeshCentral, local automation, Responses API adapters or other authorized clients are unavailable.
