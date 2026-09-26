@@ -46,6 +46,7 @@ No arbitrary shell and no mutation tool is currently exposed.
 
 ## Invariants
 
+- SROF execution is independent of ChatGPT plan, model vendor and conversational UI.
 - One SROF authority plane.
 - One host registry.
 - One receipt model.
@@ -59,11 +60,11 @@ No arbitrary shell and no mutation tool is currently exposed.
 - Keycloak is identity/authorization authority.
 - Transport reachability does not imply host/tool authority.
 
-## Chat/tool-exposure distinction
+## Client/tool-exposure distinction
 
-Remote SROF backend health and ChatGPT tool exposure are separate gates.
+Remote SROF backend health and any particular client binding are separate gates.
 
-A ChatGPT runtime can use SROF only when that runtime exposes or registers the corresponding custom MCP/app binding.
+A ChatGPT runtime can use SROF only when its plan/workspace/runtime exposes or registers the corresponding custom MCP/app binding. Other authorized clients may use the same SROF authority through their own approved adapter.
 
 Prompts cannot create a missing tool binding.
 
@@ -74,3 +75,7 @@ TOOLING_GAP — STRAN/SROF no está expuesto en este runtime.
 ```
 
 The chat must not fall back to DCP or GitHub Actions.
+
+## Private OpenAI adapter option
+
+Where a private MCP deployment is preferred, OpenAI Responses API may connect through Secure MCP Tunnel using `tunnel_id`. This is an adapter transport only; it does not replace SROF OAuth/host policy/receipts as the authority boundary and it is never required for local SROF operation.

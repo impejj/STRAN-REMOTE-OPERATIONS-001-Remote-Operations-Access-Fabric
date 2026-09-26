@@ -55,9 +55,18 @@ Potential consumers include:
 - SEF workers;
 - governed AIPS execution paths;
 - human operators;
-- incident/recovery workflows.
+- incident/recovery workflows;
+- ChatGPT when its runtime/plan exposes an approved binding;
+- OpenAI Responses API through an approved SROF adapter;
+- other MCP/API clients and local models.
 
-Consumers do not become owners of this STRAN.
+Consumers do not become owners of this STRAN and are never critical execution dependencies.
+
+## Vendor-independence invariant
+
+No critical Remote Operations capability may depend on ChatGPT Plus, any other ChatGPT plan, DCP, GitHub Actions transport, a specific model provider, or a particular conversational UI.
+
+The authoritative invariant is `INVARIANT-SROF-VENDOR-INDEPENDENCE-001`.
 
 ## Canonical source
 
@@ -67,4 +76,4 @@ The original implementation in `impejj/profesys-scientiam` is historical origin 
 
 ## P0 exit criterion
 
-DCP can be demoted from critical dependency only when a deliberate DCP-outage drill proves that self-hosted paths provide terminal, transfer, health, logs, service control and evidence collection without DCP.
+Production readiness requires deliberate outage tests proving that self-hosted SROF paths provide terminal, transfer, health, logs, service control and evidence collection when DCP and any optional AI/chat control surface are unavailable.
