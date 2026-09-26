@@ -27,6 +27,7 @@ SSH_KEY = os.environ.get("SROF_THINKPAD_KEY", "/run/secrets/thinkpad_key")
 KNOWN_HOSTS = os.environ.get("SROF_KNOWN_HOSTS", "/run/secrets/known_hosts")
 
 ALLOWED_REPO_ROOT = "/home/impejj/work/profesys"
+SCIENTIAM_REPO = "/home/impejj/work/profesys/scientiam"
 PATH_RE = re.compile(r"^/[A-Za-z0-9_./@+-]{1,500}$")
 SCHEMA = "srof.relay.request.v1"
 
@@ -116,7 +117,7 @@ def execute(req: dict) -> dict:
         return ssh(["git", "-C", repo, "status", "--short", "--branch"], 25)
 
     if op == "fase0_probe":
-        repo = "/home/impejj/work/profesys/scientiam"
+        repo = SCIENTIAM_REPO
         script = """
 set -e
 cd /home/impejj/work/profesys/scientiam
@@ -145,6 +146,34 @@ python3 -m pytest -q \
 echo "SROF_FASE0_PROBE=PASS"
 """
         return ssh(["bash", "-lc", script], 180)
+
+    if op == "portable_read_smoke":
+        # Fixed bounded operation: no user-controlled shell or path arguments.
+        # The human checkout is never mutated. Execution uses a disposable clone.
+        script = f"""
+set -euo pipefail
+SRC={shlex.quote(SCIENTIAM_REPO)}
+TMP="$(mktemp -d /tmp/srof-portable-read.XXXXXX)"
+cleanup() {{
+  docker compose -f "$TMP/repo/services/srof-portable-worker/docker-compose.yml" down -v --remove-orphans >/dev/null 2>&1 || true
+  rm -rf "$TMP"
+}}
+trap cleanup EXIT
+
+git -C "$SRC" fetch origin main
+git clone --local "$SRC" "$TMP/repo" >/dev/null 2>&1
+git -C "$TMP/repo" checkout --detach origin/main >/dev/null 2>&1
+
+cd "$TMP/repo/services/srof-portable-worker"
+export SROF_WORKER_TOKEN="srof-relay-smoke-token"
+export SROF_READ_ROOT="$PWD/fixture"
+export SROF_RECEIPT_DIR="$PWD/.smoke-receipts"
+bash ./scripts/smoke.sh
+
+test -s "$SROF_RECEIPT_DIR/portable-read-smoke-001.json"
+echo "SROF_PORTABLE_READ_HOST_SMOKE=PASS"
+"""
+        return ssh(["bash", "-lc", script], 300)
 
     raise ValueError(f"OPERATION_DENIED:{op}")
 
@@ -206,7 +235,7 @@ class Handler(BaseHTTPRequestHandler):
                 "service": "srof-relay-poc",
                 "worker": "docker",
                 "target": "THINKPAD-E470",
-                "operations": ["host_health", "git_status", "fase0_probe"],
+                "operations": ["host_health", "git_status", "fase0_probe", "portable_read_smoke"],
             })
             return
 
