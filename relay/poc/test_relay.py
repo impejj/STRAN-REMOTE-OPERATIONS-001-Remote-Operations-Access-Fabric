@@ -52,7 +52,7 @@ class PortableReadSmokeTests(unittest.TestCase):
         req = self.request()
         req["host_id"] = "PROFESYS-SCIENTIAM"
         with patch.object(relay, "stage_worker_source") as staged:
-            with self.assertRaisesRegex(ValueError, "POC_HOST_DENIED"):
+            with self.assertRaisesRegex(ValueError, "SERVER_OPERATION_DENIED"):
                 relay.execute(req)
         staged.assert_not_called()
 
@@ -132,6 +132,65 @@ class ContainerRuntimeProbeTests(unittest.TestCase):
         self.assertNotIn("usermod", script)
         self.assertNotIn("chmod", script)
         self.assertNotIn("chown", script)
+
+
+class ServerReadWorkerTests(unittest.TestCase):
+    def test_server_health_routes_to_persistent_worker(self):
+        req = {
+            "schema": "srof.relay.request.v1",
+            "request_id": "server-health-test",
+            "host_id": "PROFESYS-SCIENTIAM",
+            "operation": "server_read_worker_health",
+            "args": {},
+        }
+        expected = {"exit_code": 0, "stdout": '{"status":"HEALTHY"}', "stderr": ""}
+        with patch.object(relay, "server_read_worker_request", return_value=expected) as mocked:
+            result = relay.execute(req)
+        self.assertEqual(result, expected)
+        mocked.assert_called_once_with("GET", "/health")
+
+    def test_server_read_job_is_typed_and_allowlisted(self):
+        req = {
+            "schema": "srof.relay.request.v1",
+            "request_id": "server-read-test",
+            "host_id": "PROFESYS-SCIENTIAM",
+            "operation": "server_read_worker_job",
+            "args": {"operation": "fs_list", "args": {"path": "."}},
+        }
+        expected = {"exit_code": 0, "stdout": '{"state":"VERIFIED"}', "stderr": ""}
+        with patch.object(relay, "server_read_worker_request", return_value=expected) as mocked:
+            result = relay.execute(req)
+        self.assertEqual(result, expected)
+        method, endpoint, payload = mocked.call_args.args
+        self.assertEqual((method, endpoint), ("POST", "/jobs"))
+        self.assertEqual(payload["schema"], "srof.worker.job.v1")
+        self.assertEqual(payload["operation"], "fs_list")
+        self.assertEqual(payload["args"], {"path": "."})
+        self.assertTrue(payload["request_id"].startswith("SROF-SERVER-READ-"))
+
+    def test_server_read_job_rejects_mutation(self):
+        req = {
+            "schema": "srof.relay.request.v1",
+            "request_id": "server-mutation-test",
+            "host_id": "PROFESYS-SCIENTIAM",
+            "operation": "server_read_worker_job",
+            "args": {"operation": "file_put", "args": {"path": "x"}},
+        }
+        with patch.object(relay, "server_read_worker_request") as mocked:
+            with self.assertRaisesRegex(ValueError, "SERVER_READ_OPERATION_DENIED"):
+                relay.execute(req)
+        mocked.assert_not_called()
+
+    def test_server_rejects_thinkpad_only_operation(self):
+        req = {
+            "schema": "srof.relay.request.v1",
+            "request_id": "server-deny-test",
+            "host_id": "PROFESYS-SCIENTIAM",
+            "operation": "portable_read_smoke",
+            "args": {},
+        }
+        with self.assertRaisesRegex(ValueError, "SERVER_OPERATION_DENIED"):
+            relay.execute(req)
 
 
 if __name__ == "__main__":

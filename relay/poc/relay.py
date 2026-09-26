@@ -13,7 +13,9 @@ import time
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import PurePosixPath
+from urllib.error import HTTPError
 from urllib.parse import urlparse
+from urllib.request import Request, urlopen
 
 DATA_DIR = os.environ.get("SROF_RELAY_DATA", "/data")
 DB_PATH = os.path.join(DATA_DIR, "relay.sqlite3")
@@ -29,6 +31,9 @@ KNOWN_HOSTS = os.environ.get("SROF_KNOWN_HOSTS", "/run/secrets/known_hosts")
 ALLOWED_REPO_ROOT = "/home/impejj/work/profesys"
 SCIENTIAM_REPO = "/home/impejj/work/profesys/scientiam"
 WORKER_SOURCE = os.environ.get("SROF_WORKER_SOURCE", "/source/srof-portable-worker")
+SERVER_READ_WORKER_URL = os.environ.get("SROF_SERVER_READ_WORKER_URL", "http://srof-worker-read-server:8781").rstrip("/")
+SERVER_READ_WORKER_TOKEN_FILE = os.environ.get("SROF_SERVER_READ_WORKER_TOKEN_FILE", "/run/secrets/server_read_worker_token")
+SERVER_READ_OPERATIONS = ("fs_list", "fs_read", "fs_find", "git_status", "git_diff")
 PATH_RE = re.compile(r"^/[A-Za-z0-9_./@+-]{1,500}$")
 SCHEMA = "srof.relay.request.v1"
 
@@ -142,15 +147,67 @@ def stage_worker_source(kind: str) -> str:
     return remote_root
 
 
+def server_read_worker_request(method: str, endpoint: str, payload: dict | None = None) -> dict:
+    if method not in {"GET", "POST"}:
+        raise ValueError("WORKER_HTTP_METHOD_DENIED")
+    if endpoint not in {"/health", "/capabilities", "/jobs"}:
+        raise ValueError("WORKER_HTTP_ENDPOINT_DENIED")
+    headers = {"Accept": "application/json"}
+    data = None
+    if method == "POST":
+        if endpoint != "/jobs":
+            raise ValueError("WORKER_HTTP_POST_DENIED")
+        with open(SERVER_READ_WORKER_TOKEN_FILE, encoding="utf-8") as handle:
+            token = handle.read().strip()
+        if not token:
+            raise RuntimeError("SERVER_READ_WORKER_TOKEN_EMPTY")
+        headers["Authorization"] = "Bearer " + token
+        headers["Content-Type"] = "application/json"
+        data = json.dumps(payload or {}, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    req = Request(SERVER_READ_WORKER_URL + endpoint, data=data, headers=headers, method=method)
+    try:
+        with urlopen(req, timeout=20) as response:
+            body = response.read(262144).decode("utf-8", "replace")
+            return {"exit_code": 0, "stdout": body, "stderr": ""}
+    except HTTPError as exc:
+        body = exc.read(262144).decode("utf-8", "replace")
+        return {"exit_code": 72, "stdout": body, "stderr": f"WORKER_HTTP_{exc.code}"}
+    except Exception as exc:
+        return {"exit_code": 73, "stdout": "", "stderr": f"WORKER_HTTP_FAILED:{type(exc).__name__}"}
+
+
 def execute(req: dict) -> dict:
     if req.get("schema") != SCHEMA:
         raise ValueError("INVALID_SCHEMA")
-    if req.get("host_id") != "THINKPAD-E470":
-        raise ValueError("POC_HOST_DENIED")
+    host_id = req.get("host_id")
     op = req.get("operation")
     args = req.get("args") or {}
     if not isinstance(args, dict):
         raise ValueError("ARGS_MUST_BE_OBJECT")
+
+    if host_id == "PROFESYS-SCIENTIAM":
+        if op == "server_read_worker_health":
+            return server_read_worker_request("GET", "/health")
+        if op == "server_read_worker_capabilities":
+            return server_read_worker_request("GET", "/capabilities")
+        if op == "server_read_worker_job":
+            operation = str(args.get("operation", ""))
+            job_args = args.get("args") or {}
+            if operation not in SERVER_READ_OPERATIONS:
+                raise ValueError("SERVER_READ_OPERATION_DENIED")
+            if not isinstance(job_args, dict):
+                raise ValueError("SERVER_READ_JOB_ARGS_MUST_BE_OBJECT")
+            payload = {
+                "schema": "srof.worker.job.v1",
+                "request_id": "SROF-SERVER-READ-" + uuid.uuid4().hex[:20],
+                "operation": operation,
+                "args": job_args,
+            }
+            return server_read_worker_request("POST", "/jobs", payload)
+        raise ValueError("SERVER_OPERATION_DENIED")
+
+    if host_id != "THINKPAD-E470":
+        raise ValueError("POC_HOST_DENIED")
 
     if op == "host_health":
         return ssh(["sh", "-lc", "hostname -s; id -un; uptime; df -P / | tail -1"], 20)
@@ -334,7 +391,7 @@ class Handler(BaseHTTPRequestHandler):
                 "service": "srof-relay-poc",
                 "worker": "docker",
                 "target": "THINKPAD-E470",
-                "operations": ["host_health", "git_status", "fase0_probe", "container_runtime_probe", "portable_read_smoke", "portable_dev_smoke"],
+                "operations": ["host_health", "git_status", "fase0_probe", "container_runtime_probe", "portable_read_smoke", "portable_dev_smoke", "server_read_worker_health", "server_read_worker_capabilities", "server_read_worker_job"],
             })
             return
 
