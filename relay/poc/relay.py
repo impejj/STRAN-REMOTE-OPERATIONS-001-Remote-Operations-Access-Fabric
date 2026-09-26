@@ -190,6 +190,39 @@ echo "SROF_FASE0_PROBE=PASS"
 """
         return ssh(["bash", "-lc", script], 180)
 
+    if op == "container_runtime_probe":
+        # Read-only capability probe. Never changes groups, sockets, contexts or daemons.
+        script = r"""
+set +e
+echo "HOST=$(hostname -s)"
+echo "USER=$(id -un)"
+echo "=== ID ==="
+id
+echo "=== SYSTEM DOCKER SOCKET ==="
+if [ -S /var/run/docker.sock ]; then
+  stat -c 'PATH=%n MODE=%A UID=%u GID=%g OWNER=%U GROUP=%G' /var/run/docker.sock
+else
+  echo "SYSTEM_DOCKER_SOCKET=ABSENT"
+fi
+echo "=== USER RUNTIME SOCKETS ==="
+uid="$(id -u)"
+for p in "/run/user/$uid/docker.sock" "/run/user/$uid/podman/podman.sock"; do
+  if [ -S "$p" ]; then
+    stat -c 'PATH=%n MODE=%A UID=%u GID=%g OWNER=%U GROUP=%G' "$p"
+  else
+    echo "ABSENT=$p"
+  fi
+done
+echo "=== DOCKER CLI ==="
+command -v docker || true
+docker context show 2>&1 || true
+docker version --format 'CLIENT={{.Client.Version}} SERVER={{.Server.Version}}' 2>&1 || true
+echo "=== PODMAN CLI ==="
+command -v podman || true
+podman info --format 'HOST={{.Host.Hostname}} ROOTLESS={{.Host.Security.Rootless}}' 2>&1 || true
+"""
+        return ssh(["bash", "-lc", script], 30)
+
     if op == "portable_read_smoke":
         # Source is staged from the SERVER-owned canonical snapshot.
         # No GitHub fetch and no human checkout mutation occur on THINKPAD.
@@ -301,7 +334,7 @@ class Handler(BaseHTTPRequestHandler):
                 "service": "srof-relay-poc",
                 "worker": "docker",
                 "target": "THINKPAD-E470",
-                "operations": ["host_health", "git_status", "fase0_probe", "portable_read_smoke", "portable_dev_smoke"],
+                "operations": ["host_health", "git_status", "fase0_probe", "container_runtime_probe", "portable_read_smoke", "portable_dev_smoke"],
             })
             return
 
