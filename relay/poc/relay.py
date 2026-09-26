@@ -31,10 +31,13 @@ SCIENTIAM_REPO = "/home/impejj/work/profesys/scientiam"
 PATH_RE = re.compile(r"^/[A-Za-z0-9_./@+-]{1,500}$")
 SCHEMA = "srof.relay.request.v1"
 
-os.makedirs(RECEIPTS_DIR, exist_ok=True)
+
+def ensure_storage() -> None:
+    os.makedirs(RECEIPTS_DIR, exist_ok=True)
 
 
 def db() -> sqlite3.Connection:
+    ensure_storage()
     conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute(
@@ -179,6 +182,7 @@ echo "SROF_PORTABLE_READ_HOST_SMOKE=PASS"
 
 
 def worker(job_id: str, req: dict) -> None:
+    ensure_storage()
     set_state(job_id, "RUNNING")
     started = time.time()
     receipt = {
