@@ -1,10 +1,11 @@
 name: SROF CI
-# EXECUTION_POLICY: Self-hosted local-first CI; PR or explicit manual dispatch only, no merge-push duplicate.
+# EXECUTION_POLICY: Local-first runtime proof plus host-independent static validation.
 
 on:
   pull_request:
     paths:
       - "gateway/**"
+      - "relay/**"
       - "clients/**"
       - "docs/**"
       - "deploy/**"
@@ -12,6 +13,7 @@ on:
       - "tests/**"
       - ".github/workflows/srof-ci.yml"
   workflow_dispatch:
+
 permissions:
   contents: read
 
@@ -20,7 +22,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  gateway:
+  gateway-local:
+    name: Gateway local runtime validation
     runs-on: self-hosted
     timeout-minutes: 15
     defaults:
@@ -40,8 +43,41 @@ jobs:
         run: .venv/bin/python -m compileall src
       - name: Validate remote-ops shell syntax
         shell: bash
+        run: bash -n ../deploy/remote-ops/*.sh
+
+  gateway-static:
+    name: Gateway host-independent validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: gateway
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create isolated Python environment
+        shell: bash
         run: |
-          bash -n ../deploy/remote-ops/*.sh
+          python3 -m venv .venv
+          .venv/bin/python -m pip install --upgrade pip
+          .venv/bin/pip install -e '.[dev]'
+      - name: Policy tests
+        run: .venv/bin/pytest -q
+      - name: Compile gateway
+        run: .venv/bin/python -m compileall src
+      - name: Validate remote-ops shell syntax
+        shell: bash
+        run: bash -n ../deploy/remote-ops/*.sh
+
+  relay-static:
+    name: Relay static policy tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Relay unit tests
+        run: python3 -m unittest discover -s relay/poc -p 'test_*.py' -v
+      - name: Compile Relay
+        run: python3 -m py_compile relay/poc/relay.py
 
   client-static:
     name: OpenAI SROF client static

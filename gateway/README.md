@@ -27,11 +27,32 @@ python -m srof_gateway.server
 
 ## P0 tools
 
+Core host/runtime tools:
+
 - hosts_list
 - host_health
+- fs_list / fs_read / fs_find
+- process_list
 - service_status
-- git_status
-- docker_ps
+- docker_ps / docker_logs
+- git_status / git_diff
 - journal_tail
+- network_listeners
+
+Portable-worker bridge (candidate):
+
+- worker_list
+- worker_health
+- worker_capabilities
+- worker_read_job
+
+`worker_read_job` can target only an allowlisted READ worker and only the
+READ operation allowlist. DEV is intentionally visible through health and
+capabilities but cannot execute through the A1 bridge.
+
+Worker bearer tokens are read from protected files on the target host; they
+are not MCP arguments and are not embedded as literal secrets in SSH argv.
+
+See `docs/PORTABLE-WORKER-RUNTIME-BRIDGE.md`.
 
 Mutation tools are added only after policy/readback tests exist.

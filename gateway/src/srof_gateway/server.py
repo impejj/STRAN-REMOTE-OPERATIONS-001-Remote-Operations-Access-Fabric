@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import uuid
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
@@ -23,6 +24,14 @@ from .cloudflare_access import (
 )
 from .ssh_runner import SshRunner
 from .keycloak_auth import KeycloakJWTVerifier, OAuthRuntimeConfig
+from .worker_runtime import (
+    READ_WORKER_ID,
+    worker_capabilities_argv,
+    worker_health_argv,
+    worker_inventory,
+    worker_read_job_argv,
+    worker_spec,
+)
 
 
 def _mcp_runtime_settings() -> dict[str, object]:
@@ -232,6 +241,81 @@ def docker_logs(host_id: str, container: str, tail: int = 100) -> dict[str, obje
     tail = max(1, min(int(tail), 500))
     r = runner.run_argv(h.host_id, h.ssh_alias, "docker_logs", ["docker", "logs", "--tail", str(tail), container])
     return {"receipt": r.__dict__, "ok": r.exit_code == 0}
+
+
+@mcp.tool()
+def worker_list(host_id: str) -> dict[str, object]:
+    h = _host(host_id)
+    require_capability(h, "DOCKER")
+    return {
+        "host_id": h.host_id,
+        "workers": worker_inventory(),
+        "note": "inventory is an allowlist; runtime health must be checked separately",
+    }
+
+
+@mcp.tool()
+def worker_health(host_id: str, worker_id: str) -> dict[str, object]:
+    h = _host(host_id)
+    require_capability(h, "DOCKER")
+    spec = worker_spec(worker_id)
+    r = runner.run_argv(
+        h.host_id,
+        h.ssh_alias,
+        f"worker_health:{spec.worker_id}",
+        worker_health_argv(spec.worker_id),
+    )
+    payload = _json_receipt(r)
+    payload["worker_id"] = spec.worker_id
+    payload["role"] = spec.role
+    return payload
+
+
+@mcp.tool()
+def worker_capabilities(host_id: str, worker_id: str) -> dict[str, object]:
+    h = _host(host_id)
+    require_capability(h, "DOCKER")
+    spec = worker_spec(worker_id)
+    r = runner.run_argv(
+        h.host_id,
+        h.ssh_alias,
+        f"worker_capabilities:{spec.worker_id}",
+        worker_capabilities_argv(spec.worker_id),
+    )
+    payload = _json_receipt(r)
+    payload["worker_id"] = spec.worker_id
+    payload["role"] = spec.role
+    return payload
+
+
+@mcp.tool()
+def worker_read_job(
+    host_id: str,
+    operation: str,
+    args: dict[str, object] | None = None,
+    worker_id: str = READ_WORKER_ID,
+) -> dict[str, object]:
+    h = _host(host_id)
+    require_capability(h, "DOCKER")
+    spec = worker_spec(worker_id)
+    request_id = f"SROF-WRK-{uuid.uuid4()}"
+    remote_argv = worker_read_job_argv(
+        spec.worker_id,
+        request_id=request_id,
+        operation=operation,
+        args=dict(args or {}),
+    )
+    r = runner.run_argv(
+        h.host_id,
+        h.ssh_alias,
+        f"worker_read_job:{spec.worker_id}:{operation}",
+        remote_argv,
+    )
+    payload = _json_receipt(r)
+    payload["worker_id"] = spec.worker_id
+    payload["worker_request_id"] = request_id
+    payload["operation"] = operation
+    return payload
 
 
 @mcp.tool()
