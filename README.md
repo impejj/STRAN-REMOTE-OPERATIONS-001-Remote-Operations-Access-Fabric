@@ -41,10 +41,16 @@ Two independent planes:
 ## Canonical boundaries
 
 - **STRAN-REMOTE-OPERATIONS-001** = transversal responsibility and governance.
-- **SROF** = implementation/platform for that responsibility.
+- **SROF** = implementation/platform and execution fabric for that responsibility.
 - **This repository** = technical source of truth.
 - **profesys-scientiam** = historical origin and downstream integrator/consumer.
-- **ChatGPT Control Tower** = decision and continuity surface; not code authority.
+- **ChatGPT, OpenAI API, Claude, local agents and future clients** = optional consumers/adapters; none owns or defines SROF authority.
+
+### Vendor-independence invariant
+
+Critical Remote Operations MUST continue when ChatGPT, OpenAI API, DCP or any single external provider is unavailable.
+
+See: `docs/governance/INVARIANT-SROF-VENDOR-INDEPENDENCE-001.md`.
 
 ## Non-negotiable security invariants
 
@@ -107,15 +113,18 @@ This rule is mandatory for every PROFESYS/SCIENTIAM chat, worker, runbook and co
 
 ### Canonical machine-access path
 
+The canonical path begins at SROF, not at a particular chat product:
+
 ```text
-ChatGPT / APPDEV
-→ SCIENTIAM SROF MCP
-→ https://srof.scientiam.com.ar/mcp
-→ Cloudflare Tunnel (transport only)
-→ SROF native OAuth Resource Server
+Authorized human / AI client / automation
+→ optional adapter or control surface
+→ SCIENTIAM SROF MCP / governed direct-access surface
+→ SROF authorization + host policy + receipts
 → governed OpenSSH
-→ ThinkPad / SERVER
+→ ThinkPad / SERVER / Workers
 ```
+
+ChatGPT is one optional control surface. A ChatGPT plan/runtime without a SROF binding does not degrade the underlying fabric.
 
 OAuth authority:
 
@@ -132,7 +141,7 @@ Required scope:
 - GitHub is SCM only.
 - Cloudflare Access / Zero Trust is not part of the canonical SROF path.
 - Current MCP tool surface is read-only and host-policy governed.
-- If the current ChatGPT/APPDEV runtime exposes `SCIENTIAM SROF`, use it.
+- If the current ChatGPT/APPDEV runtime exposes `SCIENTIAM SROF`, it may use that adapter.
 - If it does not expose the binding, return:
 
 ```text
@@ -152,4 +161,4 @@ Read before machine operations:
 - `docs/runbooks/CHATGPT-SROF-EXPOSURE.md`
 - `docs/runbooks/SROF-NATIVE-OAUTH.md`
 
-This directive supersedes all earlier bootstrap wording that described DCP, GitHub Actions, Cloudflare Access or OpenAI Secure MCP Tunnel as the canonical machine-access path.
+This directive supersedes earlier wording that made any client product the canonical machine-access path. OpenAI Secure MCP Tunnel remains an allowed **adapter transport** for private MCP access where supported; it is not SROF authority and is not required for SROF to function.
