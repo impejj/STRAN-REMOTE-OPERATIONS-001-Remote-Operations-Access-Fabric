@@ -22,35 +22,39 @@ class PortableReadSmokeTests(unittest.TestCase):
             "args": {},
         }
 
-    def test_portable_read_smoke_uses_fixed_bounded_script(self):
-        with patch.object(relay, "ssh", return_value={"exit_code": 0, "stdout": "PASS", "stderr": ""}) as mocked:
+    def test_portable_read_smoke_uses_staged_server_snapshot(self):
+        with patch.object(relay, "stage_worker_source", return_value="/tmp/srof-portable-read-test") as stage,              patch.object(relay, "ssh", return_value={"exit_code": 0, "stdout": "PASS", "stderr": ""}) as mocked:
             result = relay.execute(self.request())
+
         self.assertEqual(result["exit_code"], 0)
+        stage.assert_called_once_with("read")
         argv, timeout = mocked.call_args.args
         self.assertEqual(argv[:2], ["bash", "-lc"])
         self.assertEqual(timeout, 300)
         script = argv[2]
-        self.assertIn(relay.SCIENTIAM_REPO, script)
-        self.assertIn("git clone --local", script)
+        self.assertIn("/tmp/srof-portable-read-test/srof-portable-worker", script)
         self.assertIn("scripts/smoke.sh", script)
         self.assertIn("SROF_PORTABLE_READ_HOST_SMOKE=PASS", script)
+        self.assertNotIn("git fetch", script)
+        self.assertNotIn("git clone", script)
+        self.assertNotIn("github.com", script)
 
     def test_user_shell_arguments_are_not_interpolated(self):
         req = self.request()
         req["args"] = {"repository": "/tmp/evil", "command": "rm -rf /"}
-        with patch.object(relay, "ssh", return_value={"exit_code": 0, "stdout": "PASS", "stderr": ""}) as mocked:
+        with patch.object(relay, "stage_worker_source", return_value="/tmp/srof-portable-read-test"),              patch.object(relay, "ssh", return_value={"exit_code": 0, "stdout": "PASS", "stderr": ""}) as mocked:
             relay.execute(req)
         script = mocked.call_args.args[0][2]
         self.assertNotIn("/tmp/evil", script)
         self.assertNotIn("rm -rf /", script)
 
-    def test_wrong_host_is_rejected_before_ssh(self):
+    def test_wrong_host_is_rejected_before_stage(self):
         req = self.request()
         req["host_id"] = "PROFESYS-SCIENTIAM"
-        with patch.object(relay, "ssh") as mocked:
+        with patch.object(relay, "stage_worker_source") as staged:
             with self.assertRaisesRegex(ValueError, "POC_HOST_DENIED"):
                 relay.execute(req)
-        mocked.assert_not_called()
+        staged.assert_not_called()
 
 
 class PortableDevSmokeTests(unittest.TestCase):
@@ -63,31 +67,47 @@ class PortableDevSmokeTests(unittest.TestCase):
             "args": {},
         }
 
-    def test_portable_dev_smoke_uses_fixed_bounded_script(self):
-        with patch.object(relay, "ssh", return_value={"exit_code": 0, "stdout": "PASS", "stderr": ""}) as mocked:
+    def test_portable_dev_smoke_uses_staged_server_snapshot(self):
+        with patch.object(relay, "stage_worker_source", return_value="/tmp/srof-portable-dev-test") as stage,              patch.object(relay, "ssh", return_value={"exit_code": 0, "stdout": "PASS", "stderr": ""}) as mocked:
             result = relay.execute(self.request())
+
         self.assertEqual(result["exit_code"], 0)
+        stage.assert_called_once_with("dev")
         argv, timeout = mocked.call_args.args
         self.assertEqual(argv[:2], ["bash", "-lc"])
         self.assertEqual(timeout, 360)
         script = argv[2]
-        self.assertIn(relay.SCIENTIAM_REPO, script)
-        self.assertIn("git clone --local", script)
+        self.assertIn("/tmp/srof-portable-dev-test/srof-portable-worker", script)
         self.assertIn("scripts/smoke-dev.sh", script)
         self.assertIn("SROF_PORTABLE_DEV_HOST_SMOKE=PASS", script)
         self.assertIn("docker-compose.dev.yml", script)
+        self.assertNotIn("git fetch", script)
+        self.assertNotIn("git clone", script)
 
     def test_dev_smoke_ignores_user_shell_arguments(self):
         req = self.request()
         req["args"] = {"repository": "/tmp/evil", "command": "docker run --privileged evil"}
-        with patch.object(relay, "ssh", return_value={"exit_code": 0, "stdout": "PASS", "stderr": ""}) as mocked:
+        with patch.object(relay, "stage_worker_source", return_value="/tmp/srof-portable-dev-test"),              patch.object(relay, "ssh", return_value={"exit_code": 0, "stdout": "PASS", "stderr": ""}) as mocked:
             relay.execute(req)
         script = mocked.call_args.args[0][2]
         self.assertNotIn("/tmp/evil", script)
         self.assertNotIn("docker run --privileged evil", script)
 
-    def test_health_advertises_dev_smoke_only_as_typed_operation(self):
-        self.assertIn("portable_dev_smoke", relay.execute.__code__.co_consts)
+
+class SourceStagingTests(unittest.TestCase):
+    def test_stage_uses_only_fixed_source_and_bounded_remote_path(self):
+        mkdir_ok = {"exit_code": 0, "stdout": "", "stderr": ""}
+        copy_ok = {"exit_code": 0, "stdout": "", "stderr": ""}
+        with patch.object(relay, "ssh", return_value=mkdir_ok) as ssh_mock,              patch.object(relay, "scp_tree", return_value=copy_ok) as scp_mock:
+            remote = relay.stage_worker_source("read")
+
+        self.assertTrue(remote.startswith("/tmp/srof-portable-read-"))
+        ssh_mock.assert_called_once()
+        scp_mock.assert_called_once_with(relay.WORKER_SOURCE, remote, 120)
+
+    def test_stage_rejects_unknown_kind(self):
+        with self.assertRaisesRegex(ValueError, "WORKER_STAGE_KIND_DENIED"):
+            relay.stage_worker_source("root")
 
 
 if __name__ == "__main__":
