@@ -31,6 +31,7 @@ KNOWN_HOSTS = os.environ.get("SROF_KNOWN_HOSTS", "/run/secrets/known_hosts")
 ALLOWED_REPO_ROOT = "/home/impejj/work/profesys"
 SCIENTIAM_REPO = "/home/impejj/work/profesys/scientiam"
 WORKER_SOURCE = os.environ.get("SROF_WORKER_SOURCE", "/source/srof-portable-worker")
+FOUNDER_COMPANION_SOURCE = os.environ.get("SROF_FOUNDER_COMPANION_SOURCE", "/source/founder-companion")
 SERVER_READ_WORKER_URL = os.environ.get("SROF_SERVER_READ_WORKER_URL", "http://srof-worker-read-server:8781").rstrip("/")
 SERVER_READ_WORKER_TOKEN_FILE = os.environ.get("SROF_SERVER_READ_WORKER_TOKEN_FILE", "/run/secrets/server_read_worker_token")
 SERVER_READ_OPERATIONS = ("fs_list", "fs_read", "fs_find", "git_status", "git_diff")
@@ -186,6 +187,50 @@ def execute(req: dict) -> dict:
         raise ValueError("ARGS_MUST_BE_OBJECT")
 
     if host_id == "PROFESYS-SCIENTIAM":
+        if op == "clara_intake_local_probe":
+            # Fixed read-only inspection of Founder Companion durable capture layer.
+            root = os.path.realpath(FOUNDER_COMPANION_SOURCE)
+            captures = os.path.join(root, "captures.jsonl")
+            outbox = os.path.join(root, "outbox")
+            result = {
+                "root": root,
+                "captures_exists": os.path.isfile(captures),
+                "outbox_exists": os.path.isdir(outbox),
+                "outbox_files": [],
+                "captures_tail": [],
+            }
+            if os.path.isdir(outbox):
+                entries = []
+                for name in os.listdir(outbox):
+                    path = os.path.realpath(os.path.join(outbox, name))
+                    if not path.startswith(root + os.sep) or not os.path.isfile(path):
+                        continue
+                    st = os.stat(path)
+                    entries.append((st.st_mtime, name, st.st_size, path))
+                entries.sort(reverse=True)
+                for mtime, name, size, path in entries[:25]:
+                    item = {"name": name, "mtime": mtime, "size": size}
+                    if size <= 65536:
+                        try:
+                            with open(path, encoding="utf-8") as handle:
+                                item["content"] = json.load(handle)
+                        except Exception:
+                            item["content"] = None
+                    result["outbox_files"].append(item)
+            if os.path.isfile(captures):
+                with open(captures, encoding="utf-8", errors="replace") as handle:
+                    lines = handle.readlines()[-25:]
+                for line in lines:
+                    try:
+                        result["captures_tail"].append(json.loads(line))
+                    except Exception:
+                        result["captures_tail"].append({"raw": line[:4000]})
+            return {
+                "exit_code": 0,
+                "stdout": json.dumps(result, ensure_ascii=False),
+                "stderr": "",
+            }
+
         if op == "server_read_worker_health":
             return server_read_worker_request("GET", "/health")
         if op == "server_read_worker_capabilities":
